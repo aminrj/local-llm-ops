@@ -1,1 +1,24 @@
-zsh: no such file or directory: ./scripts/benchmark.sh
+=== Benchmark: ollama / qwen3.5:35b-a3b-q4_K_M ===
+Time: Sat Apr 18 02:12:08 PM CEST 2026
+
+Warming up...
+--- short prompt ---
+  Prompt tokens:     6
+  Completion tokens: 512
+  Time:              9494ms
+  Speed:             53.9 tok/s
+
+--- medium prompt ---
+  Prompt tokens:     17
+  Completion tokens: 512
+  Time:              8317ms
+  Speed:             61.6 tok/s
+
+--- long prompt ---
+  Prompt tokens:     24
+  Completion tokens: 512
+  Time:              8312ms
+  Speed:             61.6 tok/s
+
+--- VRAM ---
+23890 MiB, 24576 MiB

@@ -1,1 +1,24 @@
-zsh: no such file or directory: ./scripts/benchmark.sh
+=== Benchmark: llamacpp / qwen3.5-35b-a3b ===
+Time: Sat Apr 18 02:11:34 PM CEST 2026
+
+Warming up...
+--- short prompt ---
+  Prompt tokens:     16
+  Completion tokens: 512
+  Time:              3936ms
+  Speed:             130.1 tok/s
+
+--- medium prompt ---
+  Prompt tokens:     27
+  Completion tokens: 512
+  Time:              3759ms
+  Speed:             136.2 tok/s
+
+--- long prompt ---
+  Prompt tokens:     34
+  Completion tokens: 512
+  Time:              4979ms
+  Speed:             102.8 tok/s
+
+--- VRAM ---
+22567 MiB, 24576 MiB

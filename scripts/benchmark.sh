@@ -16,6 +16,13 @@ echo "=== Benchmark: $BACKEND / $MODEL ==="
 echo "Time: $(date)"
 echo ""
 
+# Warmup request -- not measured, just primes the model
+echo "Warming up..."
+curl -s "$URL/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d "{\"model\":\"$MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"max_tokens\":5,\"stream\":false}" > /dev/null
+sleep 2
+
 for entry in "${PROMPTS[@]}"; do
   label="${entry%%:*}"
   prompt="${entry#*:}"
@@ -23,15 +30,18 @@ for entry in "${PROMPTS[@]}"; do
   START=$(date +%s%N)
   RESPONSE=$(curl -s "$URL/chat/completions" \
     -H "Content-Type: application/json" \
-    -d "{\"model\":\"$MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"$prompt\"}],\"max_tokens\":512,\"stream\":false}")
+    -d "{\"model\":\"$MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"$prompt\"}],\"max_tokens\":512,\"stream\":false,\"temperature\":0.6,\"top_p\":0.95,\"top_k\":20}")
   END=$(date +%s%N)
   ELAPSED=$(( (END - START) / 1000000 ))
   COMPLETION_TOKENS=$(echo $RESPONSE | python3 -c "import sys,json; print(json.load(sys.stdin).get('usage',{}).get('completion_tokens',0))" 2>/dev/null)
+  PROMPT_TOKENS=$(echo $RESPONSE | python3 -c "import sys,json; print(json.load(sys.stdin).get('usage',{}).get('prompt_tokens',0))" 2>/dev/null)
   TOKS_PER_SEC=$(python3 -c "print(round($COMPLETION_TOKENS/($ELAPSED/1000),1))" 2>/dev/null)
-  echo "  Tokens: $COMPLETION_TOKENS"
-  echo "  Time:   ${ELAPSED}ms"
-  echo "  Speed:  ${TOKS_PER_SEC} tok/s"
+  echo "  Prompt tokens:     $PROMPT_TOKENS"
+  echo "  Completion tokens: $COMPLETION_TOKENS"
+  echo "  Time:              ${ELAPSED}ms"
+  echo "  Speed:             ${TOKS_PER_SEC} tok/s"
   echo ""
+  sleep 3  # let VRAM settle between runs
 done
 
 echo "--- VRAM ---"
