@@ -1,0 +1,28 @@
+# Models — never commit large binaries
+*.gguf
+*.bin
+*.safetensors
+*.pt
+*.pth
+
+# Local overrides — put machine-specific tweaks here, not in tracked files
+compose/local.yml
+.env
+.env.*
+!.env.example
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python (for huggingface_hub or any local tooling)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
