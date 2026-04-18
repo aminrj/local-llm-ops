@@ -1,11 +1,11 @@
-# Qwen3.5 35B-A3B  —  MoE 20GB blob, fits fully on RTX 3090
-# blob: sha256-f25d609171b8f80950a60f38696597f74025de4070682d2fb1eeffe306ca7d5d
+# Qwen3.6 35B-A3B  —  MoE blob, fits fully on RTX 3090
+# blob: sha256-f5ee307a2982106a6eb82b62b2c00b575c9072145a759ae4660378acda8dcf2d
 # VRAM budget: ~20GB weights + ~2GB KV (q8_0, 16k ctx) = ~22GB
 # MoE: all expert weights stay resident, only active experts compute per token
 services:
   llama-server:
     command: >
-      -m /blobs/sha256-f25d609171b8f80950a60f38696597f74025de4070682d2fb1eeffe306ca7d5d
+      -m /blobs/sha256-f5ee307a2982106a6eb82b62b2c00b575c9072145a759ae4660378acda8dcf2d
       --port 8080 --host 0.0.0.0
       --ctx-size 16384
       -n 8192
