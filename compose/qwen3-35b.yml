@@ -11,4 +11,4 @@ services:
       --cache-type-k q8_0
       --cache-type-v q8_0
       --cache-ram 4096
-      --flash-attn
+      --flash-attn on
