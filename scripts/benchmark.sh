@@ -3,7 +3,7 @@ BACKEND=${1:-ollama}
 MODEL=${2:-qwen3.5:35b-a3b-q4_K_M}
 
 OLLAMA_URL="http://localhost:11434/v1"
-LLAMACPP_URL="http://localhost:8080/v1"
+LLAMACPP_URL="http://localhost:8081/v1"
 URL=$([ "$BACKEND" = "ollama" ] && echo $OLLAMA_URL || echo $LLAMACPP_URL)
 
 PROMPTS=(

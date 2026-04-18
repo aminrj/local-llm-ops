@@ -1,0 +1,24 @@
+=== Benchmark: ollama / qwen3.6-35b-a3b-gpu ===
+Time: Sat Apr 18 04:26:29 PM CEST 2026
+
+Warming up...
+--- short prompt ---
+  Prompt tokens:     6
+  Completion tokens: 111
+  Time:              14379ms
+  Speed:             7.7 tok/s
+
+--- medium prompt ---
+  Prompt tokens:     17
+  Completion tokens: 512
+  Time:              97069ms
+  Speed:             5.3 tok/s
+
+--- long prompt ---
+  Prompt tokens:     24
+  Completion tokens: 512
+  Time:              35418ms
+  Speed:             14.5 tok/s
+
+--- VRAM ---
+24283 MiB, 24576 MiB

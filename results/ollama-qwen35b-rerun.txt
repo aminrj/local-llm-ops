@@ -1,0 +1,24 @@
+=== Benchmark: ollama / qwen3.5:35b-a3b-q4_K_M ===
+Time: Sat Apr 18 04:10:34 PM CEST 2026
+
+Warming up...
+--- short prompt ---
+  Prompt tokens:     6
+  Completion tokens: 512
+  Time:              5178ms
+  Speed:             98.9 tok/s
+
+--- medium prompt ---
+  Prompt tokens:     17
+  Completion tokens: 512
+  Time:              5172ms
+  Speed:             99.0 tok/s
+
+--- long prompt ---
+  Prompt tokens:     24
+  Completion tokens: 512
+  Time:              5316ms
+  Speed:             96.3 tok/s
+
+--- VRAM ---
+23381 MiB, 24576 MiB

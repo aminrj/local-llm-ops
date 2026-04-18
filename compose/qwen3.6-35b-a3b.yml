@@ -7,11 +7,12 @@ services:
     command: >
       -m /blobs/sha256-f5ee307a2982106a6eb82b62b2c00b575c9072145a759ae4660378acda8dcf2d
       --port 8080 --host 0.0.0.0
-      --ctx-size 16384
+      --ctx-size 65536
       -n 8192
       --n-gpu-layers 99
       --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0
       --parallel 1
+      --cache-ram 4096
       --cache-type-k q8_0
       --cache-type-v q8_0
       --flash-attn on

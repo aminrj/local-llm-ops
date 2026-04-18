@@ -1,0 +1,24 @@
+=== Benchmark: llamacpp / qwen3.5-35b-a3b ===
+Time: Sat Apr 18 04:17:48 PM CEST 2026
+
+Warming up...
+--- short prompt ---
+  Prompt tokens:     16
+  Completion tokens: 512
+  Time:              3600ms
+  Speed:             142.2 tok/s
+
+--- medium prompt ---
+  Prompt tokens:     27
+  Completion tokens: 512
+  Time:              3757ms
+  Speed:             136.3 tok/s
+
+--- long prompt ---
+  Prompt tokens:     34
+  Completion tokens: 512
+  Time:              3848ms
+  Speed:             133.1 tok/s
+
+--- VRAM ---
+21740 MiB, 24576 MiB
