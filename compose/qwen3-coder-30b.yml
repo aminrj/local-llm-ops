@@ -1,0 +1,16 @@
+# Qwen3-Coder 30B  —  18GB blob, fits fully on RTX 3090
+# blob: sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a
+# VRAM budget: ~18GB weights + ~4GB KV (q8_0, 32k ctx) = ~22GB
+services:
+  llama-server:
+    command: >
+      -m /blobs/sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a
+      --port 8080 --host 0.0.0.0
+      --ctx-size 32768
+      -n 8192
+      --n-gpu-layers 99
+      --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0
+      --parallel 1
+      --cache-type-k q8_0
+      --cache-type-v q8_0
+      --flash-attn

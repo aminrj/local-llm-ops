@@ -11,6 +11,6 @@ services:
               count: 1
               capabilities: [gpu]
     volumes:
-      - ${HOME}/models:/models:ro
+      - /usr/share/ollama/.ollama/models/blobs:/blobs:ro
     ports:
       - "8080:8080"

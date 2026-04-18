@@ -1,0 +1,17 @@
+# Gemma4 31B  —  19GB blob, tight fit on RTX 3090 — flash-attn required
+# blob: sha256-280af6832eca23cb322c4dcc65edfea98a21b8f8ab07dc7553bd6f7e6e7a3313
+# VRAM budget: ~19GB weights + ~2GB KV (q8_0, 8k ctx) = ~21GB
+# Kept at 8k context to preserve headroom. Reduce to 4096 if you hit OOM.
+services:
+  llama-server:
+    command: >
+      -m /blobs/sha256-280af6832eca23cb322c4dcc65edfea98a21b8f8ab07dc7553bd6f7e6e7a3313
+      --port 8080 --host 0.0.0.0
+      --ctx-size 8192
+      -n 4096
+      --n-gpu-layers 99
+      --temp 1.0 --top-p 0.95 --top-k 64 --min-p 0.0
+      --parallel 1
+      --cache-type-k q8_0
+      --cache-type-v q8_0
+      --flash-attn

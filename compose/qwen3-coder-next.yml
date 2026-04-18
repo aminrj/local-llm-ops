@@ -1,0 +1,19 @@
+# Qwen3-Coder-Next  —  49GB blob, exceeds 24GB VRAM → partial CPU offload
+# blob: sha256-30e51a7cb1cf1333b9e298b90b4c7790fe2572d8736b002482a0ac96328a2ffb
+# VRAM budget: ~20GB for GPU layers, rest offloaded to system RAM
+# --n-gpu-layers 30 puts ~18-20GB of weights on GPU; tune up/down based on OOM.
+# Context is kept small to leave GPU headroom; for larger context use CPU-only
+# inference (set n-gpu-layers 0) if you have enough RAM.
+services:
+  llama-server:
+    command: >
+      -m /blobs/sha256-30e51a7cb1cf1333b9e298b90b4c7790fe2572d8736b002482a0ac96328a2ffb
+      --port 8080 --host 0.0.0.0
+      --ctx-size 8192
+      -n 4096
+      --n-gpu-layers 30
+      --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0
+      --parallel 1
+      --cache-type-k q8_0
+      --cache-type-v q8_0
+      --flash-attn
