@@ -7,13 +7,12 @@ One GGUF file, two serving backends, one `make` command.
 
 ## The idea
 
-[Ollama](https://ollama.com) and [llama.cpp](https://github.com/ggerganov/llama.cpp) serve the same GGUF from `~/models/` without copying it. Ollama is the fast path for quick questions; llama.cpp (via Docker) is the serious path for long sessions, large contexts, and full parameter control.
+Two tracks depending on model generation:
 
-```
-~/models/
-└── Qwen3.6-35B-A3B/
-    └── Qwen3.6-35B-A3B-UD-IQ4_NL.gguf   ← one file, both tools read it
-```
+- **Docker track** — Qwen3.5 and older, via `docker compose`. Simple, no build step.
+- **Native track** — Qwen3.6+, via a locally built `llama-server` binary. Required because the Docker image doesn't yet support Qwen3.6 architectures.
+
+Both expose an OpenAI-compatible API at `http://localhost:8081/v1`.
 
 ---
 
@@ -21,32 +20,45 @@ One GGUF file, two serving backends, one `make` command.
 
 | Tool | Install |
 |---|---|
-| [Docker](https://docs.docker.com/engine/install/) + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) | for llama.cpp |
+| [Docker](https://docs.docker.com/engine/install/) + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) | for Docker track |
 | [Ollama](https://ollama.com) | `curl -fsSL https://ollama.com/install.sh \| sh` |
-| [huggingface-cli](https://huggingface.co/docs/huggingface_hub/guides/cli) | `pip install huggingface_hub` |
+| `hf` (HuggingFace CLI) | `pip install huggingface_hub` |
+| CUDA toolkit + cmake | for native llama.cpp build |
 
 ---
 
 ## Quick start
 
+### Docker track — Qwen3.5 and older
+
 ```bash
 git clone https://github.com/yourname/local-llm-ops
 cd local-llm-ops
 
-# 1. Download a model (once)
-make download-qwen3-35b
+# Start Qwen3.5 35B via Docker
+make run-qwen3.5-35b-a3b
+# API at http://localhost:8081/v1
 
-# 2. Register it with Ollama (once)
-make register-qwen3-35b
+make stop
+```
 
-# 3a. Quick question → Ollama
-ollama run qwen3-35b "explain MoE routing in one paragraph"
+### Native track — Qwen3.6+
 
-# 3b. Long session → llama.cpp
-make run-qwen3-35b
-# API now at http://localhost:8080/v1
+```bash
+# 1. Build the binary once (requires CUDA toolkit + cmake)
+make build-llamacpp
 
-# 4. Stop when done
+# 2. Download the model (once)
+make download-qwen3.6
+
+# 3. Run
+make run-qwen3.6-35b-a3b
+# API at http://localhost:8081/v1
+
+# Optional: wait until server is ready
+make wait
+
+# Stop
 make stop
 ```
 
@@ -57,10 +69,11 @@ make stop
 | Situation | Command | Why |
 |---|---|---|
 | Quick question, small task | `ollama run qwen3-8b` | Fast startup, low overhead |
-| Long coding session | `make run-qwen3-35b` | 65k context, KV cache, flash-attn |
+| Long coding session (Qwen3.5) | `make run-qwen3.5-35b-a3b` | 65k context, KV cache, flash-attn |
+| Long coding session (Qwen3.6) | `make run-qwen3.6-35b-a3b` | Native binary, latest model support |
 | Trying a new model | `ollama run <model>` | Easy, no config needed |
 | You need 32k+ context reliably | llama.cpp | Ollama silently caps context |
-| Multiple parallel requests | llama.cpp | Set `--parallel` in compose file |
+| Multiple parallel requests | llama.cpp | Set `--parallel` in compose/script |
 
 ---
 
@@ -68,17 +81,20 @@ make stop
 
 ```
 local-llm-ops/
-├── Makefile                  # everything you need day-to-day
+├── Makefile                        # everything you need day-to-day
 ├── models/
-│   ├── qwen3-35b.Modelfile   # Ollama model registration
+│   ├── qwen3-35b.Modelfile         # Ollama model registration
 │   └── qwen3-8b.Modelfile
-├── compose/
-│   ├── base.yml              # shared Docker settings (GPU, volume, port)
-│   ├── qwen3-35b.yml         # model-specific llama.cpp flags
+├── compose/                        # Docker track (Qwen3.5 and older)
+│   ├── base.yml                    # shared Docker settings (GPU, volume, port)
+│   ├── qwen3.5-35b-a3b.yml
 │   └── qwen3-8b.yml
 └── scripts/
-    ├── download.sh           # pull a GGUF from HuggingFace
-    └── register-ollama.sh    # register all Modelfiles at once
+    ├── build-llamacpp.sh           # build native llama-server from source
+    ├── run-qwen3.6-35b-a3b.sh      # native track launcher for Qwen3.6
+    ├── download-qwen3.6.sh         # download Qwen3.6 GGUF + mmproj
+    ├── download.sh                 # generic GGUF downloader
+    └── register-ollama.sh          # register all Modelfiles at once
 ```
 
 ---
@@ -86,16 +102,34 @@ local-llm-ops/
 ## All make targets
 
 ```
-make help                 Show this list
-make download-qwen3-35b   Pull Qwen3.6-35B IQ4_NL GGUF
-make download-qwen3-8b    Pull Qwen3-8B Q8_0 GGUF
-make register-qwen3-35b   Create ollama model from local GGUF
+make help                    Show this list
+
+# Native llama.cpp binary
+make build-llamacpp          Build llama-server from ~/llama.cpp source (CUDA)
+make update-llamacpp         Pull latest source and rebuild
+
+# Download
+make download-qwen3.6        Download Qwen3.6-35B Q4_K_XL GGUF + mmproj
+
+# Ollama registration
+make register-qwen3-35b      Create ollama model from local GGUF
 make register-qwen3-8b
-make run-qwen3-35b        Start llama.cpp server for 35B
-make run-qwen3-8b         Start llama.cpp server for 8B
-make stop                 Stop the running llama.cpp container
-make status               Show Docker + Ollama status
-make logs                 Tail llama.cpp server logs
+
+# Docker track (Qwen3.5 and older)
+make run-qwen3.5-35b-a3b     Start llama.cpp server via Docker
+make run-qwen3-coder-30b
+make run-qwen3-8b
+make run-gemma4-26b
+make run-gemma4-31b
+
+# Native track (Qwen3.6+)
+make run-qwen3.6-35b-a3b     Start native llama-server (background)
+make wait                    Poll http://localhost:8081/health until ready
+
+# Manage
+make stop                    Stop Docker containers + kill llama-server
+make status                  Show Docker + Ollama status
+make logs                    Tail llama.cpp server logs
 ```
 
 ---
@@ -242,8 +276,14 @@ KV cache adds on top: at 65k context, q8_0 KV costs ~2–4 GB depending on model
 **`ollama create` fails with "file not found"**  
 → The `FROM` path in the Modelfile must be an absolute path to the GGUF. Update it to match your `$HOME`.
 
-**llama.cpp exits immediately**  
+**llama.cpp exits immediately (Docker)**  
 → Run `make logs` to see the error. Most common: wrong model path, VRAM OOM, or unsupported flag for the image version.
+
+**Qwen3.6 fails to load in Docker**  
+→ The Docker image doesn't support Qwen3.6 architecture yet. Use the native track: `make build-llamacpp` then `make run-qwen3.6-35b-a3b`.
+
+**`make run-qwen3.6-35b-a3b` returns immediately with no server**  
+→ The native script runs in the background. Check `ps aux | grep llama-server` or run `make wait` to poll until ready. Logs go to stdout of the background process; redirect if needed: `bash scripts/run-qwen3.6-35b-a3b.sh > /tmp/llama.log 2>&1 &`.
 
 **Context gets silently truncated in Ollama**  
 → Ollama caps `num_ctx` at model creation time. If you need more than 32k reliably, use llama.cpp.
