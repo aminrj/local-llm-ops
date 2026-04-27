@@ -13,7 +13,7 @@ help:
 	@echo "    make download-qwen3.6        Download Qwen3.6-35B-A3B Q4_K_XL + mmproj"
 	@echo ""
 	@echo "  Run"
-	@echo "    make run-qwen3.6-35b-a3b     Qwen3.6 35B-A3B [native, 65k ctx]"
+	@echo "    make run-qwen3.6-35b-a3b     Qwen3.6 35B-A3B [native, 131k ctx, q4_0 KV]"
 	@echo "    make wait                    Wait until llama-server is ready at :8081"
 	@echo ""
 	@echo "  Manage"
