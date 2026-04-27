@@ -6,7 +6,6 @@
 *.pth
 
 # Local overrides — put machine-specific tweaks here, not in tracked files
-compose/local.yml
 .env
 .env.*
 !.env.example
