@@ -15,4 +15,7 @@ exec "$HOME/llama.cpp/llama-server" \
   --cache-ram 4096 \
   --flash-attn on \
   --jinja \
+  --no-context-shift \
+  --chat-template-kwargs '{"preserve_thinking": true}' \
+  -n 32768 \
   --parallel 1
