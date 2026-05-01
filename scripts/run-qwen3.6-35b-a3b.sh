@@ -12,7 +12,7 @@ exec "$HOME/llama.cpp/llama-server" \
   --n-gpu-layers 99 \
   --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0 \
   --cache-type-k q4_0 --cache-type-v q4_0 \
-  --cache-ram 4096 \
+  --cache-ram 0 \
   --flash-attn on \
   --jinja \
   --no-context-shift \
