@@ -12,10 +12,11 @@ exec "$HOME/llama.cpp/llama-server" \
   --n-gpu-layers 99 \
   --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0 \
   --cache-type-k q4_0 --cache-type-v q4_0 \
-  --cache-ram 0 \
+  --cache-ram 4096 \
   --flash-attn on \
   --jinja \
   --no-context-shift \
   --chat-template-kwargs '{"preserve_thinking": true}' \
   -n 32768 \
-  --parallel 1
+  --parallel 1 \
+  -to 3600
