@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Log directory
+LOG_DIR="$HOME/.local/share/llama-logs"
+mkdir -p "$LOG_DIR"
+
 # BeeLlama.cpp — Qwen3.6 27B Q5_K_S + DFlash speculative decoding
 # "Precision" combo: Q5 target + Q4 drafter + turbo4 K cache + turbo3_tcq V cache
 # Port 8082 (codemode uses 8081)
@@ -40,4 +44,6 @@ exec "$BEE_SERVER" \
   --reasoning on \
   --chat-template-kwargs '{"preserve_thinking":true}' \
   --temp 0.6 --top-k 20 --min-p 0.0 \
-  -to 3600
+  --defrag-thold 0.1 \
+  -to 3600 \
+  >"$LOG_DIR/beellama.log" 2>&1
