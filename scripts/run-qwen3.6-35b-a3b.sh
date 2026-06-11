@@ -7,7 +7,8 @@ mkdir -p "$LOG_DIR"
 
 MODEL_DIR="/usr/share/ollama/.ollama/models/Qwen3.6-35B-A3B"
 
-exec "$HOME/llama.cpp/build/bin/llama-server" \
+# Run in background, fully detached from terminal
+nohup "$HOME/llama.cpp/build/bin/llama-server" \
   --model  "$MODEL_DIR/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf" \
   --mmproj "$MODEL_DIR/mmproj-F16.gguf" \
   --alias  "qwen3.6-35b-a3b" \
@@ -27,4 +28,7 @@ exec "$HOME/llama.cpp/build/bin/llama-server" \
   -n 32768 \
   --parallel 1 \
   -to 3600 \
-  >"$LOG_DIR/codemode.log" 2>&1
+  >>"$LOG_DIR/codemode.log" 2>&1 < /dev/null &
+
+# Disown so it survives terminal close
+builtin disown

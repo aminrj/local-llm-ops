@@ -20,7 +20,8 @@ if [ ! -x "$BEE_SERVER" ]; then
   exit 1
 fi
 
-exec "$BEE_SERVER" \
+# Run in background, fully detached from terminal
+nohup "$BEE_SERVER" \
   --model  "$MODEL_DIR/Qwen3.6-27B-Q5_K_S.gguf" \
   --mmproj "$MODEL_DIR/mmproj-BF16.gguf" \
   --no-mmproj-offload \
@@ -46,4 +47,7 @@ exec "$BEE_SERVER" \
   --temp 0.6 --top-k 20 --min-p 0.0 \
   --defrag-thold 0.1 \
   -to 3600 \
-  >"$LOG_DIR/beellama.log" 2>&1
+  >>"$LOG_DIR/beellama.log" 2>&1 < /dev/null &
+
+# Disown so it survives terminal close
+builtin disown
