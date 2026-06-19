@@ -5,7 +5,7 @@ set -euo pipefail
 LOG_DIR="$HOME/.local/share/llama-logs"
 mkdir -p "$LOG_DIR"
 
-MODEL_DIR="/usr/share/ollama/.ollama/models/Qwen3.6-35B-A3B"
+MODEL_DIR="$HOME/models/Qwen3.6-35B-A3B"
 
 # Run in background, fully detached from terminal
 nohup "$HOME/llama.cpp/build/bin/llama-server" \
