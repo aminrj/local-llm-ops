@@ -108,18 +108,26 @@ the CPU. The server logs its worst case at **1130 MiB** of VRAM. Vision still
 works, image processing is just slower — and if you are using this for coding,
 you are not sending images.
 
-### Measured throughput
-
-From 3085 real generations in `codemode.log`:
-
-| | p10 | median | p90 |
-|---|---|---|---|
-| decode (tg) | 50 tok/s | **67 tok/s** | 91 tok/s |
-| prompt eval (pp) | 649 tok/s | **1233 tok/s** | 2044 tok/s |
+### The `-ub` sweep
 
 Prompt eval is the bottleneck for agentic coding, which re-ingests large
-contexts constantly. `-ub 512` is the limiter; raising it needs VRAM headroom
-first, which is what `--no-mmproj-offload` buys.
+contexts constantly. Decode barely moves with `-ub`; prompt eval moves a lot.
+Measured with `scripts/sweep.sh`, all at `--ctx-size 131072` unless noted:
+
+| config | VRAM free | pp @16k | pp @48k | pp @96k | tg @96k |
+|---|---|---|---|---|---|
+| `-ub 512` | 1654 MiB | 3042 | 2838 | 2441 | 70.8 |
+| **`-ub 1024`** | **1161 MiB** | **3672** | **3285** | **2798** | **69.5** |
+| `-ub 2048` | 476 MiB | 3980 | 3702 | 3065 | 70.1 |
+| `-ub 1024`, ctx 98304 | 1442 MiB | 3558 | 3366 | 2813 | 70.9 |
+
+`-ub 1024` is the default: **+15–21% prompt eval for no decode cost**, with
+1161 MiB of headroom. `-ub 2048` buys another ~9% but leaves 476 MiB, which is
+the regime that produced the `CUDA error: unknown error` crashes — not a trade
+worth making on a card that also drives a display.
+
+Dropping context to 98304 frees 281 MiB and makes prompt eval slightly
+*worse*. There is no reason to run below 131072 on this box.
 
 ### Why no speculative decoding on the 35B-A3B
 
@@ -133,9 +141,22 @@ their expert sets across K positions, so you pay more memory traffic than the
 skipped forward passes save. The saturation threshold is ~94 tokens; useful
 draft sizes are 5–32.
 
-This does **not** automatically apply to MTP, whose draft head shares the
-trunk instead of running a separate model. That is why `run-mtp` exists — to
-measure rather than assume.
+MTP was worth measuring separately, since its draft head shares the trunk
+instead of running a separate model. **Measured: it does not fit.** The MTP
+context costs 749 MiB on top of larger weights, and draft acceptance was good
+(0.71 token, 88% draft) but irrelevant:
+
+| | VRAM free | tg @1k | tg @16k |
+|---|---|---|---|
+| baseline, ctx 131072 | 1161 MiB | 124.8 | 112.7 |
+| MTP, ctx 131072 | 360 MiB | 145.2 | 2.5 (thrashing) |
+| MTP, ctx 98304 | 574 MiB | 146.1 | server died |
+
++17% decode at 1k context, then it falls over. At 98304 the server crashed
+outright with `CUDA error: device not ready` partway through the 16k row.
+Making MTP fit means giving up context this box demonstrably runs out of, for
+a speedup that only exists at depths it never works at. `run-mtp` is kept for
+re-testing on a larger card, not as a daily driver.
 
 ### Why DFlash on the 27B
 

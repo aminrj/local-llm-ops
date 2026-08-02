@@ -1,0 +1,152 @@
+=== sweep started 2026-08-02T19:31:32+02:00 ===
+repeats=2 ctx_sizes=1000,16000,48000,96000
+
+################################################################
+### ub512  (run-qwen3.6-35b-a3b.sh  CTX=131072 UBATCH=512)
+################################################################
+Stopping llama-server processes...
+  PID 334793 (port 8081)
+VRAM: 544 / 24576 MiB used
+Loading model on :8081 ......................................... READY
+VRAM: 22922 / 24576 MiB used (1654 MiB free)
+server   : http://localhost:8081
+model    : qwen3.6-35b-a3b
+n_ctx    : 131072
+
+     ctx  prompt tok   pp tok/s   tg tok/s   wall s  accept
+-----------------------------------------------------------
+    1000         944     1533.4      122.8     2.39       -
+   16000       14551     3028.6      106.3     5.95       -
+   48000       43575     2811.0       89.3    16.59       -
+   96000       87048     2441.4       70.8    37.01       -
+Traceback (most recent call last):
+  File "/home/amine/git/local-llms/local-llm-ops/scripts/bench-ctx.py", line 232, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/amine/git/local-llms/local-llm-ops/scripts/bench-ctx.py", line 210, in main
+    "spec_types": spec,
+                  ^^^^
+NameError: name 'spec' is not defined. Did you mean: 'super'?
+!!! ub512 BENCH FAILED
+
+################################################################
+### ub1024  (run-qwen3.6-35b-a3b.sh  CTX=131072 UBATCH=1024)
+################################################################
+Stopping llama-server processes...
+  PID 342762 (port 8081)
+VRAM: 534 / 24576 MiB used
+Loading model on :8081 ................................................................. READY
+VRAM: 23415 / 24576 MiB used (1161 MiB free)
+server   : http://localhost:8081
+model    : qwen3.6-35b-a3b
+n_ctx    : 131072
+
+     ctx  prompt tok   pp tok/s   tg tok/s   wall s  accept
+-----------------------------------------------------------
+    1000         944     1732.4      124.8     2.12       -
+   16000       14551     3672.2      112.7     5.65       -
+   48000       43575     3285.4       91.0    14.23       -
+   96000       87048     2797.6       69.5    34.05       -
+Traceback (most recent call last):
+  File "/home/amine/git/local-llms/local-llm-ops/scripts/bench-ctx.py", line 232, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/amine/git/local-llms/local-llm-ops/scripts/bench-ctx.py", line 210, in main
+    "spec_types": spec,
+                  ^^^^
+NameError: name 'spec' is not defined. Did you mean: 'super'?
+!!! ub1024 BENCH FAILED
+
+################################################################
+### ub2048  (run-qwen3.6-35b-a3b.sh  CTX=131072 UBATCH=2048)
+################################################################
+Stopping llama-server processes...
+  PID 346472 (port 8081)
+VRAM: 534 / 24576 MiB used
+Loading model on :8081 .................................................................................................................................................................................. READY
+VRAM: 24100 / 24576 MiB used (476 MiB free)
+WARNING: under 700 MiB headroom. This box throws 'CUDA error:
+         unknown error' when the display driver needs memory.
+         Lower CTX or UBATCH.
+server   : http://localhost:8081
+model    : qwen3.6-35b-a3b
+n_ctx    : 131072
+
+     ctx  prompt tok   pp tok/s   tg tok/s   wall s  accept
+-----------------------------------------------------------
+    1000         944     1693.2      118.3     2.06       -
+   16000       14551     3980.4      110.3     4.98       -
+   48000       43575     3702.4       90.5    12.67       -
+   96000       87048     3065.0       70.1    31.48       -
+Traceback (most recent call last):
+  File "/home/amine/git/local-llms/local-llm-ops/scripts/bench-ctx.py", line 232, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/amine/git/local-llms/local-llm-ops/scripts/bench-ctx.py", line 210, in main
+    "spec_types": spec,
+                  ^^^^
+NameError: name 'spec' is not defined. Did you mean: 'super'?
+!!! ub2048 BENCH FAILED
+
+################################################################
+### ub1024-ctx98k  (run-qwen3.6-35b-a3b.sh  CTX=98304 UBATCH=1024)
+################################################################
+Stopping llama-server processes...
+  PID 350824 (port 8081)
+VRAM: 386 / 24576 MiB used
+Loading model on :8081 ..................................................................................................................................... READY
+VRAM: 23134 / 24576 MiB used (1442 MiB free)
+server   : http://localhost:8081
+model    : qwen3.6-35b-a3b
+n_ctx    : 98304
+
+     ctx  prompt tok   pp tok/s   tg tok/s   wall s  accept
+-----------------------------------------------------------
+    1000         944     1903.4      123.2     2.24       -
+   16000       14551     3557.5      110.3     5.09       -
+   48000       43575     3365.6       91.5    13.91       -
+   96000       87048     2813.0       70.9    32.52       -
+Traceback (most recent call last):
+  File "/home/amine/git/local-llms/local-llm-ops/scripts/bench-ctx.py", line 232, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/amine/git/local-llms/local-llm-ops/scripts/bench-ctx.py", line 210, in main
+    "spec_types": spec,
+                  ^^^^
+NameError: name 'spec' is not defined. Did you mean: 'super'?
+!!! ub1024-ctx98k BENCH FAILED
+
+################################################################
+### mtp-ctx98k  (run-qwen3.6-35b-a3b-mtp.sh  CTX=98304 UBATCH=512)
+################################################################
+Stopping llama-server processes...
+  PID 355319 (port 8081)
+VRAM: 435 / 24576 MiB used
+Loading model on :8083 ................................ READY
+VRAM: 24002 / 24576 MiB used (574 MiB free)
+WARNING: under 700 MiB headroom. This box throws 'CUDA error:
+         unknown error' when the display driver needs memory.
+         Lower CTX or UBATCH.
+server   : http://localhost:8083
+model    : qwen3.6-35b-a3b-mtp
+n_ctx    : 98304
+
+     ctx  prompt tok   pp tok/s   tg tok/s   wall s  accept
+-----------------------------------------------------------
+    1000         944     1362.3      146.1     2.25    0.71
+   16000  FAILED: Remote end closed connection without response
+   48000  FAILED: <urlopen error [Errno 111] Connection refused>
+   96000  FAILED: <urlopen error [Errno 111] Connection refused>
+Traceback (most recent call last):
+  File "/home/amine/git/local-llms/local-llm-ops/scripts/bench-ctx.py", line 232, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/amine/git/local-llms/local-llm-ops/scripts/bench-ctx.py", line 210, in main
+    "spec_types": spec,
+                  ^^^^
+NameError: name 'spec' is not defined. Did you mean: 'super'?
+!!! mtp-ctx98k BENCH FAILED
+
+Stopping llama-server processes...
+=== sweep finished 2026-08-02T19:47:34+02:00 ===
+Summarize with: python3 scripts/summarize-sweep.py

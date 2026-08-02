@@ -207,7 +207,6 @@ def main() -> int:
                 "server": base,
                 "model": model,
                 "n_ctx": n_ctx,
-                "spec_types": spec,
                 "gen_tokens": args.gen_tokens,
                 "repeats": args.repeats,
                 "rows": rows,

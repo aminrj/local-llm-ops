@@ -12,7 +12,10 @@ mkdir -p "$LOG_DIR"
 MODEL_DIR="${MODEL_DIR:-$HOME/models/Qwen3.6-35B-A3B}"
 PORT="${PORT:-8081}"
 CTX="${CTX:-131072}"
-UBATCH="${UBATCH:-512}"
+# 1024 measured +15-21% prompt eval over 512 with decode unchanged, leaving
+# 1161 MiB VRAM free. 2048 adds ~9% more but drops free VRAM to 476 MiB, which
+# is the regime that produced six 'CUDA error: unknown error' crashes.
+UBATCH="${UBATCH:-1024}"
 LOG_FILE="${LOG_FILE:-$LOG_DIR/codemode.log}"
 
 SERVER="$HOME/llama.cpp/build/bin/llama-server"
