@@ -94,6 +94,13 @@ def run_one(base: str, model: str, target: int, gen: int, timeout: int) -> dict:
         pp = None
         tg = round(n_gen / wall, 2) if wall > 0 and n_gen else None
 
+    # Speculative acceptance, when the server is drafting. This is the only
+    # trustworthy per-request signal that speculation is actually engaged --
+    # /props reports request-level defaults, not the server's --spec-type.
+    draft_n = timings.get("draft_n")
+    draft_acc = timings.get("draft_n_accepted")
+    accept = round(draft_acc / draft_n, 3) if draft_n else None
+
     return {
         "target_tokens": target,
         "prompt_tokens": n_prompt,
@@ -102,6 +109,7 @@ def run_one(base: str, model: str, target: int, gen: int, timeout: int) -> dict:
         "gen_per_sec": round(tg, 1) if tg else None,
         "wall_sec": round(wall, 2),
         "timing_source": source,
+        "draft_accept": accept,
     }
 
 
@@ -132,15 +140,15 @@ def main() -> int:
 
     model = args.model or props.get("model_alias", "")
     n_ctx = props.get("default_generation_settings", {}).get("n_ctx")
-    spec = (
-        props.get("default_generation_settings", {})
-        .get("params", {})
-        .get("speculative.types", "none")
-    )
+    # Deliberately not reporting default_generation_settings.params
+    # ["speculative.types"] here: that is the per-request default and reads
+    # "none" even when the server was started with --spec-type draft-mtp,
+    # which is actively misleading in a speculation A/B. The draft acceptance
+    # column below is the real signal, and the server log is authoritative:
+    #   grep 'adding speculative implementation' <logfile>
     print(f"server   : {base}")
     print(f"model    : {model}")
     print(f"n_ctx    : {n_ctx}")
-    print(f"spec     : {spec}")
     print()
 
     targets = [int(x) for x in args.ctx_sizes.split(",") if x.strip()]
@@ -150,7 +158,10 @@ def main() -> int:
     targets = [t for t in targets if not n_ctx or t + args.gen_tokens <= n_ctx]
 
     rows = []
-    hdr = f"{'ctx':>8}  {'prompt tok':>10}  {'pp tok/s':>9}  {'tg tok/s':>9}  {'wall s':>7}"
+    hdr = (
+        f"{'ctx':>8}  {'prompt tok':>10}  {'pp tok/s':>9}  {'tg tok/s':>9}  "
+        f"{'wall s':>7}  {'accept':>6}"
+    )
     print(hdr)
     print("-" * len(hdr))
 
@@ -174,13 +185,14 @@ def main() -> int:
             "gen_per_sec": _med(runs, "gen_per_sec"),
             "wall_sec": round(statistics.median(x["wall_sec"] for x in runs), 2),
             "timing_source": runs[0]["timing_source"],
+            "draft_accept": _med(runs, "draft_accept", digits=3),
             "runs": runs,
         }
         rows.append(med)
         print(
             f"{t:>8}  {med['prompt_tokens']:>10}  "
             f"{_fmt(med['prompt_per_sec']):>9}  {_fmt(med['gen_per_sec']):>9}  "
-            f"{med['wall_sec']:>7}"
+            f"{med['wall_sec']:>7}  {_fmt(med['draft_accept']):>6}"
         )
 
     out_dir = REPO / "results"
@@ -207,9 +219,9 @@ def main() -> int:
     return 0
 
 
-def _med(runs, key):
+def _med(runs, key, digits=1):
     vals = [x[key] for x in runs if x.get(key) is not None]
-    return round(statistics.median(vals), 1) if vals else None
+    return round(statistics.median(vals), digits) if vals else None
 
 
 def _fmt(v):
