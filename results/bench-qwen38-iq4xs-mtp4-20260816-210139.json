@@ -1,0 +1,139 @@
+{
+  "label": "qwen38-iq4xs-mtp4",
+  "timestamp": "20260816-210139",
+  "server": "http://localhost:8082",
+  "model": "qwen3.8-27b",
+  "n_ctx": 131072,
+  "gen_tokens": 256,
+  "repeats": 2,
+  "rows": [
+    {
+      "target_tokens": 1000,
+      "prompt_tokens": 986,
+      "gen_tokens": 48.5,
+      "prompt_per_sec": 799.9,
+      "gen_per_sec": 86.9,
+      "wall_sec": 1.81,
+      "timing_source": "server",
+      "draft_accept": 0.875,
+      "runs": [
+        {
+          "target_tokens": 1000,
+          "prompt_tokens": 986,
+          "gen_tokens": 50,
+          "prompt_per_sec": 675.5,
+          "gen_per_sec": 86.3,
+          "wall_sec": 2.03,
+          "timing_source": "server",
+          "draft_accept": 0.932
+        },
+        {
+          "target_tokens": 1000,
+          "prompt_tokens": 986,
+          "gen_tokens": 47,
+          "prompt_per_sec": 924.2,
+          "gen_per_sec": 87.6,
+          "wall_sec": 1.6,
+          "timing_source": "server",
+          "draft_accept": 0.818
+        }
+      ]
+    },
+    {
+      "target_tokens": 16000,
+      "prompt_tokens": 14593,
+      "gen_tokens": 49.5,
+      "prompt_per_sec": 1205.2,
+      "gen_per_sec": 76.4,
+      "wall_sec": 13.25,
+      "timing_source": "server",
+      "draft_accept": 0.779,
+      "runs": [
+        {
+          "target_tokens": 16000,
+          "prompt_tokens": 14593,
+          "gen_tokens": 53,
+          "prompt_per_sec": 1195.7,
+          "gen_per_sec": 79.2,
+          "wall_sec": 13.84,
+          "timing_source": "server",
+          "draft_accept": 0.808
+        },
+        {
+          "target_tokens": 16000,
+          "prompt_tokens": 14593,
+          "gen_tokens": 46,
+          "prompt_per_sec": 1214.7,
+          "gen_per_sec": 73.6,
+          "wall_sec": 12.65,
+          "timing_source": "server",
+          "draft_accept": 0.75
+        }
+      ]
+    },
+    {
+      "target_tokens": 48000,
+      "prompt_tokens": 43617,
+      "gen_tokens": 66.5,
+      "prompt_per_sec": 1071.2,
+      "gen_per_sec": 49.7,
+      "wall_sec": 42.08,
+      "timing_source": "server",
+      "draft_accept": 0.461,
+      "runs": [
+        {
+          "target_tokens": 48000,
+          "prompt_tokens": 43617,
+          "gen_tokens": 81,
+          "prompt_per_sec": 1071.8,
+          "gen_per_sec": 52.6,
+          "wall_sec": 42.27,
+          "timing_source": "server",
+          "draft_accept": 0.5
+        },
+        {
+          "target_tokens": 48000,
+          "prompt_tokens": 43617,
+          "gen_tokens": 52,
+          "prompt_per_sec": 1070.7,
+          "gen_per_sec": 46.8,
+          "wall_sec": 41.88,
+          "timing_source": "server",
+          "draft_accept": 0.421
+        }
+      ]
+    },
+    {
+      "target_tokens": 96000,
+      "prompt_tokens": 87090,
+      "gen_tokens": 50.5,
+      "prompt_per_sec": 900.7,
+      "gen_per_sec": 46.6,
+      "wall_sec": 97.84,
+      "timing_source": "server",
+      "draft_accept": 0.568,
+      "runs": [
+        {
+          "target_tokens": 96000,
+          "prompt_tokens": 87090,
+          "gen_tokens": 39,
+          "prompt_per_sec": 899.7,
+          "gen_per_sec": 43.0,
+          "wall_sec": 97.78,
+          "timing_source": "server",
+          "draft_accept": 0.538
+        },
+        {
+          "target_tokens": 96000,
+          "prompt_tokens": 87090,
+          "gen_tokens": 62,
+          "prompt_per_sec": 901.6,
+          "gen_per_sec": 50.2,
+          "wall_sec": 97.89,
+          "timing_source": "server",
+          "draft_accept": 0.597
+        }
+      ]
+    }
+  ]
+}

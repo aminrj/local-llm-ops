@@ -1,0 +1,171 @@
+{
+  "label": "qwen38-iq4xs-ctx192k-mtp3",
+  "timestamp": "20260816-212102",
+  "server": "http://localhost:8082",
+  "model": "qwen3.8-27b",
+  "n_ctx": 196608,
+  "gen_tokens": 256,
+  "repeats": 2,
+  "rows": [
+    {
+      "target_tokens": 1000,
+      "prompt_tokens": 986,
+      "gen_tokens": 33.5,
+      "prompt_per_sec": 615.5,
+      "gen_per_sec": 64.5,
+      "wall_sec": 2.23,
+      "timing_source": "server",
+      "draft_accept": 0.714,
+      "runs": [
+        {
+          "target_tokens": 1000,
+          "prompt_tokens": 986,
+          "gen_tokens": 46,
+          "prompt_per_sec": 440.4,
+          "gen_per_sec": 70.5,
+          "wall_sec": 2.88,
+          "timing_source": "server",
+          "draft_accept": 0.846
+        },
+        {
+          "target_tokens": 1000,
+          "prompt_tokens": 986,
+          "gen_tokens": 21,
+          "prompt_per_sec": 790.7,
+          "gen_per_sec": 58.6,
+          "wall_sec": 1.59,
+          "timing_source": "server",
+          "draft_accept": 0.583
+        }
+      ]
+    },
+    {
+      "target_tokens": 16000,
+      "prompt_tokens": 14593,
+      "gen_tokens": 55.5,
+      "prompt_per_sec": 1240.1,
+      "gen_per_sec": 61.9,
+      "wall_sec": 12.8,
+      "timing_source": "server",
+      "draft_accept": 0.618,
+      "runs": [
+        {
+          "target_tokens": 16000,
+          "prompt_tokens": 14593,
+          "gen_tokens": 51,
+          "prompt_per_sec": 1219.4,
+          "gen_per_sec": 54.8,
+          "wall_sec": 13.16,
+          "timing_source": "server",
+          "draft_accept": 0.517
+        },
+        {
+          "target_tokens": 16000,
+          "prompt_tokens": 14593,
+          "gen_tokens": 60,
+          "prompt_per_sec": 1260.7,
+          "gen_per_sec": 68.9,
+          "wall_sec": 12.45,
+          "timing_source": "server",
+          "draft_accept": 0.719
+        }
+      ]
+    },
+    {
+      "target_tokens": 48000,
+      "prompt_tokens": 43617,
+      "gen_tokens": 40.5,
+      "prompt_per_sec": 1085.3,
+      "gen_per_sec": 52.9,
+      "wall_sec": 40.99,
+      "timing_source": "server",
+      "draft_accept": 0.615,
+      "runs": [
+        {
+          "target_tokens": 48000,
+          "prompt_tokens": 43617,
+          "gen_tokens": 43,
+          "prompt_per_sec": 1086.7,
+          "gen_per_sec": 51.3,
+          "wall_sec": 41.02,
+          "timing_source": "server",
+          "draft_accept": 0.562
+        },
+        {
+          "target_tokens": 48000,
+          "prompt_tokens": 43617,
+          "gen_tokens": 38,
+          "prompt_per_sec": 1084.0,
+          "gen_per_sec": 54.5,
+          "wall_sec": 40.96,
+          "timing_source": "server",
+          "draft_accept": 0.667
+        }
+      ]
+    },
+    {
+      "target_tokens": 96000,
+      "prompt_tokens": 87090,
+      "gen_tokens": 45.0,
+      "prompt_per_sec": 896.7,
+      "gen_per_sec": 47.5,
+      "wall_sec": 98.16,
+      "timing_source": "server",
+      "draft_accept": 0.688,
+      "runs": [
+        {
+          "target_tokens": 96000,
+          "prompt_tokens": 87090,
+          "gen_tokens": 42,
+          "prompt_per_sec": 894.6,
+          "gen_per_sec": 47.4,
+          "wall_sec": 98.31,
+          "timing_source": "server",
+          "draft_accept": 0.667
+        },
+        {
+          "target_tokens": 96000,
+          "prompt_tokens": 87090,
+          "gen_tokens": 48,
+          "prompt_per_sec": 898.7,
+          "gen_per_sec": 47.5,
+          "wall_sec": 98.02,
+          "timing_source": "server",
+          "draft_accept": 0.708
+        }
+      ]
+    },
+    {
+      "target_tokens": 160000,
+      "prompt_tokens": 145018,
+      "gen_tokens": 63.5,
+      "prompt_per_sec": 725.2,
+      "gen_per_sec": 39.2,
+      "wall_sec": 201.71,
+      "timing_source": "server",
+      "draft_accept": 0.682,
+      "runs": [
+        {
+          "target_tokens": 160000,
+          "prompt_tokens": 145018,
+          "gen_tokens": 62,
+          "prompt_per_sec": 722.3,
+          "gen_per_sec": 37.7,
+          "wall_sec": 202.56,
+          "timing_source": "server",
+          "draft_accept": 0.651
+        },
+        {
+          "target_tokens": 160000,
+          "prompt_tokens": 145018,
+          "gen_tokens": 65,
+          "prompt_per_sec": 728.2,
+          "gen_per_sec": 40.7,
+          "wall_sec": 200.86,
+          "timing_source": "server",
+          "draft_accept": 0.714
+        }
+      ]
+    }
+  ]
+}
