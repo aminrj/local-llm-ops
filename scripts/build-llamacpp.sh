@@ -1,10 +1,31 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LLAMA_DIR="$HOME/llama.cpp"
+# Override to build a second checkout without touching the one the daily
+# driver runs on:  LLAMA_DIR=~/llama.cpp-38 bash scripts/build-llamacpp.sh
+LLAMA_DIR="${LLAMA_DIR:-$HOME/llama.cpp}"
 
-echo "==> Updating llama.cpp source..."
-git -C "$LLAMA_DIR" pull
+if [ ! -d "$LLAMA_DIR/.git" ]; then
+  echo "==> Cloning llama.cpp into $LLAMA_DIR..."
+  git clone https://github.com/ggml-org/llama.cpp "$LLAMA_DIR"
+else
+  echo "==> Updating llama.cpp source in $LLAMA_DIR..."
+  git -C "$LLAMA_DIR" pull
+fi
+
+# nvcc is not on PATH in a non-interactive shell here, and cmake's CUDA probe
+# fails with "No CMAKE_CUDA_COMPILER could be found" even though it located the
+# toolkit. Point it at nvcc explicitly.
+if ! command -v nvcc &>/dev/null; then
+  for candidate in /usr/local/cuda/bin/nvcc /usr/local/cuda-*/bin/nvcc; do
+    if [ -x "$candidate" ]; then
+      export CUDACXX="$candidate"
+      export PATH="$(dirname "$candidate"):$PATH"
+      echo "==> nvcc not on PATH, using $CUDACXX"
+      break
+    fi
+  done
+fi
 
 echo "==> Configuring cmake (CUDA, native, FA kernels)..."
 cmake "$LLAMA_DIR" -B "$LLAMA_DIR/build" \
