@@ -34,7 +34,13 @@ SPEC_NMAX="${SPEC_NMAX:-3}"
 # 'default' keeps the chat template's own default (xhigh on this model).
 # Sweep it rather than assuming: minimal|low|medium|high|xhigh|max
 EFFORT="${EFFORT:-default}"
-CACHE_RAM="${CACHE_RAM:-8192}"
+# 8192 was too small: the log shows three 'prompt state size N MiB exceeds
+# cache size limit 8192.000 MiB, skipping' events at 9826 / 14439 / 16696 MiB,
+# each of which costs a full re-prefill (~216 t/s at depth) on the way back.
+# With opencode now compacting at 160k the state tops out near 13.6 GiB;
+# 12288 covers the common case on a 28 GiB box. Raise to 14336 to cover all
+# of it if RAM pressure allows.
+CACHE_RAM="${CACHE_RAM:-12288}"
 LOG_FILE="${LOG_FILE:-$LOG_DIR/qwen38.log}"
 SERVER="${SERVER:-$HOME/llama.cpp-38/build/bin/llama-server}"
 
