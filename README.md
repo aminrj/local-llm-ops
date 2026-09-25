@@ -379,14 +379,41 @@ Two clients, two separate registries — **adding a model means editing both**:
 
 | Client | File | Key detail |
 |---|---|---|
-| opencode | `~/.config/opencode/config.json` | `provider.<id>.models.<model>`; verify with `opencode models` |
+| opencode | `clients/opencode/config.json` (linked) | `provider.<id>.models.<model>`; verify with `opencode models` |
 | pi | `~/.pi/agent/models.json` | `providers.<id>.models[].id` must equal the `--alias` |
+
+Provider ids now agree across opencode, pi and `llm.sh`:
+
+| port | server `--alias` | opencode / pi provider |
+|---|---|---|
+| 8081 | `qwen3.6-35b-a3b` | `llamacpp` / `llama-cpp` |
+| 8082 | `qwen3.8-27b` | `llamacpp-27b` |
+| 8082 | (DFlash build, no alias) | `beellama` |
+| 8083 | `qwen3.6-35b-a3b-mtp` | `llamacpp-mtp` |
+
+opencode uses `llamacpp` where pi uses `llama-cpp` for 8081 — a pre-existing
+difference, left alone because renaming a provider invalidates saved sessions
+in both clients.
 
 Both are read at startup, so a client already running when you edit the config
 will not show the new model until you restart it.
 
-These live outside this repo, so they are recorded here. opencode, under
-`provider`:
+opencode's config is no longer just *described* here — it is tracked under
+`clients/opencode/` and symlinked into place:
+
+```bash
+clients/link.sh           # link into ~/.config/opencode
+clients/link.sh --check   # report without changing anything
+```
+
+Only the four config files are linked; `skills/` and `node_modules/` stay out
+of the repo. pi's `models.json` and `settings.json` are version-controlled in
+the `~/.pi` repo (`pi-agent-setup-repo`), which tracks the live files in
+place. Note that `pi-agent-config` also carries copies of both — two repos for
+one pair of files is how they drifted apart; `~/.pi` is the one that cannot go
+stale.
+
+The opencode provider block, under `provider`:
 
 ```json
 "llamacpp-27b": {
@@ -492,9 +519,49 @@ against a 32768 window would trigger compaction at 2000 tokens. Without it the
 fallback applies and they trigger at 24576. That leaves no nominal headroom,
 which is only acceptable because ollama shifts context instead of erroring.
 
-**pi is not covered by any of this.** Its registry still carries
-`maxTokens: 32768` for the same models; whether it wastes window the same way
-depends on its own compaction model, which has not been read.
+### The same fix for pi
+
+pi's trigger, from `core/compaction/compaction.js`:
+
+```
+shouldCompact:  contextTokens > contextWindow - reserveTokens
+DEFAULT:        reserveTokens 16384, keepRecentTokens 20000
+```
+
+Simpler than opencode's, and it was overflowing for the same reason. On
+defaults with `maxTokens: 32768`:
+
+```
+trigger          196608 - 16384 = 180,224
+worst in flight  180,224 + 32,768 = 212,992   >  196,608
+```
+
+`reserveTokens` has to cover the output plus headroom, and it is global, so
+one value serves every model. With `maxTokens` cut to 16384:
+
+| pi model | contextWindow | trigger | worst | headroom |
+|---|---|---|---|---|
+| `llamacpp-27b/qwen3.8-27b` | 196608 | 159,744 | 176,128 | 20,480 |
+| `llama-cpp/qwen3.6-35b-a3b` | 131072 | 94,208 | 110,592 | 20,480 |
+| `llamacpp-mtp/qwen3.6-35b-a3b-mtp` | 131072 | 94,208 | 110,592 | 20,480 |
+| `beellama/qwen3.6-27b-dflash` | 122800 | 85,936 | 102,320 | 20,480 |
+
+In `~/.pi/agent/settings.json`:
+
+```json
+"compaction": { "enabled": true, "reserveTokens": 36864, "keepRecentTokens": 48000 }
+```
+
+**`autoCompaction` and `compactionThreshold` were dead keys.** pi 0.84 reads
+`settings.compaction.{enabled,reserveTokens,keepRecentTokens}` and nothing
+else, so the `compactionThreshold: 0.85` that had been sitting in that file
+never did anything. Removed.
+
+A global reserve is why the phantom entries had to go: `qwen2.5-coder-7b` was
+registered at `contextWindow: 16384`, and `16384 - 36864` is negative, which
+makes `shouldCompact` true on every check. Neither that GGUF nor
+`qwen3-coder-30b` is on disk any more, so both are gone from the registry and
+from `favorites`.
 
 ### Why the 35B cannot have a bigger window
 

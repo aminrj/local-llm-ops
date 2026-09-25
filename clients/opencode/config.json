@@ -1,0 +1,124 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "lsp": true,
+  "model": "llamacpp-27b/qwen3.8-27b",
+  "provider": {
+    "llamacpp-27b": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "llama.cpp (dense 27B, :8082)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8082/v1"
+      },
+      "models": {
+        "qwen3.8-27b": {
+          "name": "Qwen3.8-27B IQ4_XS (196k)",
+          "limit": {
+            "context": 196608,
+            "input": 184000,
+            "output": 16384
+          }
+        }
+      }
+    },
+    "llamacpp": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "llama.cpp (35B-A3B, :8081)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8081/v1"
+      },
+      "models": {
+        "qwen3.6-35b-a3b": {
+          "name": "Qwen3.6-35B-A3B (131k)",
+          "limit": {
+            "context": 131072,
+            "input": 124000,
+            "output": 16384
+          }
+        }
+      }
+    },
+    "llamacpp-mtp": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "llama.cpp (35B-A3B MTP, :8083)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8083/v1"
+      },
+      "models": {
+        "qwen3.6-35b-a3b-mtp": {
+          "name": "Qwen3.6-35B-A3B MTP (131k)",
+          "limit": {
+            "context": 131072,
+            "input": 124000,
+            "output": 16384
+          }
+        }
+      }
+    },
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama",
+      "options": {
+        "baseURL": "http://localhost:11434/v1"
+      },
+      "models": {
+        "qwen3-coder-next:latest": {
+          "name": "qwen3-coder-next 80B (partial CPU offload)",
+          "limit": {
+            "context": 32768,
+            "output": 8192
+          }
+        },
+        "qwen3:14b": {
+          "name": "qwen3:14b",
+          "limit": {
+            "context": 32768,
+            "output": 8192
+          }
+        },
+        "qwen3:8b": {
+          "name": "qwen3:8b",
+          "limit": {
+            "context": 32768,
+            "output": 8192
+          }
+        },
+        "qwen3-vl:latest": {
+          "name": "qwen3-vl 8B (vision)",
+          "limit": {
+            "context": 32768,
+            "output": 8192
+          }
+        },
+        "gemma4:26b": {
+          "name": "gemma4:26b",
+          "limit": {
+            "context": 32768,
+            "output": 8192
+          }
+        }
+      }
+    },
+    "beellama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "beellama (Qwen3.6-27B DFlash, :8082)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8082/v1"
+      },
+      "models": {
+        "qwen3.6-27b-dflash": {
+          "name": "Qwen3.6-27B DFlash (beellama, 122k)",
+          "limit": {
+            "context": 122800,
+            "input": 116000,
+            "output": 16384
+          }
+        }
+      }
+    }
+  },
+  "compaction": {
+    "auto": true,
+    "reserved": 24000,
+    "preserve_recent_tokens": 48000
+  }
+}
