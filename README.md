@@ -274,7 +274,18 @@ unless the acceptance column moves with them.
 `--cache-ram`. With `--cache-ram 0` the server cannot park an idle slot's KV
 in host RAM, so switching between two projects reprocesses the whole context
 — at 1233 tok/s that is well over a minute per switch. The host has 19 GB free.
-Both run scripts set `--cache-ram 8192`.
+
+8192 turned out to be too small for the dense 27B. Three times in `qwen38.log`:
+
+```
+prompt state size  9826.674 MiB exceeds cache size limit 8192.000 MiB, skipping
+prompt state size 14439.517 MiB exceeds cache size limit 8192.000 MiB, skipping
+prompt state size 16696.064 MiB exceeds cache size limit 8192.000 MiB, skipping
+```
+
+Every skip is a full re-prefill on the way back, and this model prefills at
+~216 tok/s at depth, not 1233 — minutes, not seconds. `run-qwen3.8-27b.sh` now
+sets 12288. The 35B has no skips in its log and stays at 8192.
 
 ### Flags that do nothing
 
@@ -380,14 +391,23 @@ These live outside this repo, so they are recorded here. opencode, under
 ```json
 "llamacpp-27b": {
   "npm": "@ai-sdk/openai-compatible",
-  "name": "llama.cpp (dense 27B)",
+  "name": "llama.cpp (dense 27B, :8082)",
   "options": { "baseURL": "http://127.0.0.1:8082/v1" },
   "models": {
-    "qwen3.8-27b": { "name": "qwen3.8-27b" },
-    "qwen3.6-27b": { "name": "qwen3.6-27b" }
+    "qwen3.8-27b": {
+      "name": "Qwen3.8-27B IQ4_XS (196k)",
+      "limit": { "context": 196608, "input": 184000, "output": 16384 }
+    }
   }
 }
 ```
+
+The DFlash build lives under its own `beellama` provider, matching the id pi
+already uses and the one `llm.sh` prints. It is the same port — only one of
+the two can be up at a time.
+
+See [Making opencode compact before the server errors](#making-opencode-compact-before-the-server-errors)
+for where the `limit` numbers come from. They are not cosmetic.
 
 pi, under `providers`:
 
@@ -413,6 +433,90 @@ pi, under `providers`:
 same prompt at `low` produced 270 characters of reasoning and at `xhigh` 1040,
 with the same final answer.
 
+### Making opencode compact before the server errors
+
+`--no-context-shift` means overflow is a hard error, not a silent slide. This
+already happened twice in `qwen38.log`:
+
+```
+E srv send_error: request (197289 tokens) exceeds the available context size (196608 tokens)
+E srv send_error: request (196620 tokens) exceeds the available context size (196608 tokens)
+```
+
+The deepest completion in that log sits at `n_tokens = 196607` — one token
+under the wall. The client has to compact first, and opencode only does that
+if it is told the truth about the window.
+
+Read out of the opencode binary, the usable window is:
+
+```
+usable = limit.input ? (limit.input - compaction.reserved)
+                     : (limit.context - maxOutputTokens)
+```
+
+Two traps in that one line:
+
+- **`compaction.reserved` is ignored unless `limit.input` is set.** A config
+  with `reserved` and no `limit.input` silently does nothing.
+- **`preserve_recent_tokens` defaults to `min(15000, max(2000, usable/4))`**,
+  so it caps at 15000 no matter how large the window. On a 160k window that
+  summarises everything but the last 15k — which is what "it forgot the whole
+  session" actually was.
+
+`limit.output` is sent to the server as `max_tokens`, so it is a real cap, not
+a declaration. Measured over 2750 turns in `qwen38.log`: p95 = 5076 generated
+tokens, p99 = 8294, **max ever = 9755**. Reserving 32768 for output was
+costing ~16k of usable window for nothing. 16384 is 1.7x the observed ceiling;
+`-n 32768` stays as a server-side backstop.
+
+Global block:
+
+```json
+"compaction": { "auto": true, "reserved": 24000, "preserve_recent_tokens": 48000 }
+```
+
+Per model, sized so the worst case in flight clears `--ctx-size` with ~10% to
+spare:
+
+| opencode model | `--ctx-size` | trigger | worst in flight | headroom |
+|---|---|---|---|---|
+| `llamacpp-27b/qwen3.8-27b` | 196608 | 160,000 | 176,384 | 20,224 |
+| `llamacpp/qwen3.6-35b-a3b` | 131072 | 100,000 | 116,384 | 14,688 |
+| `llamacpp-mtp/qwen3.6-35b-a3b-mtp` | 131072 | 100,000 | 116,384 | 14,688 |
+| `beellama/qwen3.6-27b-dflash` | 122800 | 92,000 | 108,384 | 14,416 |
+
+trigger = `limit.input - reserved`; worst = trigger + `limit.output`.
+
+Ollama models deliberately carry **no** `limit.input`: a 24000 global reserve
+against a 32768 window would trigger compaction at 2000 tokens. Without it the
+fallback applies and they trigger at 24576. That leaves no nominal headroom,
+which is only acceptable because ollama shifts context instead of erroring.
+
+**pi is not covered by any of this.** Its registry still carries
+`maxTokens: 32768` for the same models; whether it wastes window the same way
+depends on its own compaction model, which has not been read.
+
+### Why the 35B cannot have a bigger window
+
+Its KV is cheap — 40 layers, `full_attention_interval: 4` so only 10 carry a
+cache, 2 KV heads, 256/256 K and V. At q4_0 that is 5.6 KiB/token, against
+18 KiB/token for the dense 27B (16 of 64 layers, 4 KV heads). 131072 costs
+0.70 GiB; the native 262144 would cost 1.41 GiB.
+
+It still does not fit, because the model is weight-bound, not KV-bound:
+
+```
+Qwen3.6-35B-A3B UD-Q4_K_XL weights   20.82 GiB
+free VRAM at server start            22.75 GiB
+left for KV + compute buffers         1.93 GiB
+```
+
+At 131072 that leaves ~1.2 GiB for compute buffers. At 262144 it leaves ~0.5
+GiB, which is the same regime that produces `CUDA error: unknown error` on a
+card driving a display. The `n_ctx_seq (131072) < n_ctx_train (262144)` warning
+llama.cpp prints on every start is cosmetic at this quant. A smaller quant
+(IQ4_XS or Q3_K_XL) would free 3-4 GiB and make the question worth revisiting.
+
 ### Switching models
 
 ```bash
@@ -423,9 +527,16 @@ llm off
 llm status    # what is serving, on which port, and VRAM left
 ```
 
-`llm` stops whatever is running first, because 24 GB fits one model. The bare
-`codemode` / `qwen38` aliases still exist and still refuse to start on top of a
-live server, which is the safer behaviour when you did not mean to switch.
+`llm` stops whatever is running first, because 24 GB fits one model. Every
+alias now routes through it — `qwen38` is `llm 38`, `codeoff` is `llm off`,
+`llms` is `llm status`.
+
+The `run-*.sh` scripts are deliberately not aliased. Called directly they
+refuse to start while another server holds the GPU, and that guard is worth
+keeping: an accidental `qwen38` should not silently kill a live session, which
+on this box means re-prefilling 150k tokens at ~216 tok/s. Stop-then-start is
+an intent you express by name, through `llm`; the scripts themselves stay
+loud and safe for benchmarks and cold starts.
 
 Client-side you still have to pick the matching model, since the port decides
 which one is actually there.
