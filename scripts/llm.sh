@@ -5,16 +5,29 @@ set -uo pipefail
 # always means stop-then-start; this just does both and refuses to leave you
 # with nothing running by accident.
 #
-#   llm 38       Qwen3.8-27B dense   :8082   [llamacpp-27b/qwen3.8-27b]
-#   llm code     Qwen3.6-35B-A3B MoE :8081   [llamacpp/qwen3.6-35b-a3b]
-#   llm bee      Qwen3.6-27B DFlash  :8082   [beellama/qwen3.6-27b-dflash]
-#   llm off      stop everything
-#   llm status   what is running, and on which port
-
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
-  sed -n '4,12p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
+  cat <<'USAGE'
+One-command model switching. 24 GB fits exactly one model, so switching always
+means stop-then-start; this does both and refuses to leave you with nothing
+running by accident.
+
+  llm 38 [effort]   Qwen3.8-27B dense   :8082   llamacpp-27b/qwen3.8-27b
+  llm code          Qwen3.6-35B-A3B MoE :8081   llamacpp/qwen3.6-35b-a3b
+  llm mtp           Qwen3.6-35B-A3B MTP :8083   llamacpp-mtp/qwen3.6-35b-a3b-mtp
+  llm bee           Qwen3.6-27B DFlash  :8082   beellama/qwen3.6-27b-dflash
+  llm off           stop everything
+  llm status        what is running, on which port, and free VRAM
+
+Reasoning effort applies to `llm 38` only — it is the one model on a build
+with --reasoning-effort. It defaults to medium; the template's own default is
+xhigh, which roughly doubles generated tokens per turn.
+
+  llm 38 low              minimal | low | medium | high | xhigh | max | default
+  EFFORT=xhigh llm 38     same thing via the environment
+
+USAGE
   exit "${1:-0}"
 }
 
@@ -40,19 +53,51 @@ status() {
   fi
 }
 
+# Validate the effort here, before codeoff runs. The run script checks it too,
+# but by then the previous server is already dead — a typo should not cost you
+# a live session and a 150k-token re-prefill.
+check_effort() {
+  [ $# -eq 0 ] && return 0
+  case "$1" in
+    minimal|low|medium|high|xhigh|max|default) ;;
+    *) echo "ERROR: unknown reasoning effort '$1'." >&2
+       echo "       Expected one of: minimal low medium high xhigh max default" >&2
+       exit 1 ;;
+  esac
+  if [ $# -gt 1 ]; then
+    shift
+    echo "ERROR: unexpected extra arguments: $*" >&2
+    exit 1
+  fi
+}
+
+# Only `llm 38` takes an argument. The others run on a build with no
+# --reasoning-effort flag, so silently swallowing one would be a lie.
+no_args() {
+  local t="$1"; shift
+  if [ $# -gt 0 ]; then
+    echo "ERROR: 'llm $t' takes no arguments (got: $*)." >&2
+    echo "       Reasoning effort is supported on 'llm 38' only." >&2
+    exit 1
+  fi
+}
+
 target="${1:-status}"
 
 case "$target" in
   status|st)      echo "Serving:"; status ;;
   off|stop)       exec bash "$HERE/codeoff.sh" ;;
-  38|qwen38|3.8)  bash "$HERE/codeoff.sh" >/dev/null 2>&1
-                  shift || true
+  38|qwen38|3.8)  shift; check_effort "$@"
+                  bash "$HERE/codeoff.sh" >/dev/null 2>&1
                   exec bash "$HERE/run-qwen3.8-27b.sh" "$@" ;;
-  code|codemode)  bash "$HERE/codeoff.sh" >/dev/null 2>&1
+  code|codemode)  shift; no_args "code" "$@"
+                  bash "$HERE/codeoff.sh" >/dev/null 2>&1
                   exec bash "$HERE/run-qwen3.6-35b-a3b.sh" ;;
-  bee|beellama)   bash "$HERE/codeoff.sh" >/dev/null 2>&1
+  bee|beellama)   shift; no_args "bee" "$@"
+                  bash "$HERE/codeoff.sh" >/dev/null 2>&1
                   exec bash "$HERE/run-beellama-qwen3.6-27b.sh" ;;
-  mtp)            bash "$HERE/codeoff.sh" >/dev/null 2>&1
+  mtp)            shift; no_args "mtp" "$@"
+                  bash "$HERE/codeoff.sh" >/dev/null 2>&1
                   exec bash "$HERE/run-qwen3.6-35b-a3b-mtp.sh" ;;
   -h|--help|help) usage 0 ;;
   *)              echo "Unknown target: $target" >&2; usage 1 ;;

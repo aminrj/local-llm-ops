@@ -31,9 +31,31 @@ SPEC="${SPEC:-draft-mtp}"
 # agentic coding lives. n-max 4-6 are faster at 1k and worse at depth as draft
 # acceptance collapses (0.67 -> 0.40 at 48k). See README.
 SPEC_NMAX="${SPEC_NMAX:-3}"
-# 'default' keeps the chat template's own default (xhigh on this model).
-# Sweep it rather than assuming: minimal|low|medium|high|xhigh|max
-EFFORT="${EFFORT:-default}"
+# The chat template's own default is xhigh on this model, and xhigh is why the
+# dense 27B felt slow: measured over 562 logged turns it emitted a median 385
+# generated tokens per turn against the MoE's 192, which is most of the 13.2s
+# vs 4.0s median turn time — decode itself is only ~1.3x slower.
+#
+# medium is the default here. Override per launch, either way round:
+#   llm 38 low            positional
+#   EFFORT=xhigh llm 38   environment
+#
+# The server flag only sets the default; llama.cpp also honours a per-request
+# `reasoning_effort` field, so a client can still override it turn by turn.
+# Levels: minimal|low|medium|high|xhigh|max, or 'default' for the template's.
+EFFORT="${EFFORT:-medium}"
+
+# A positional argument wins over the environment, so `llm 38 low` works
+# without exporting anything. Reject anything else rather than handing an
+# unknown string to the template.
+if [ $# -gt 0 ]; then
+  case "$1" in
+    minimal|low|medium|high|xhigh|max|default) EFFORT="$1"; shift ;;
+    *) echo "ERROR: unknown reasoning effort '$1'." >&2
+       echo "       Expected one of: minimal low medium high xhigh max default" >&2
+       exit 1 ;;
+  esac
+fi
 # 8192 was too small: the log shows three 'prompt state size N MiB exceeds
 # cache size limit 8192.000 MiB, skipping' events at 9826 / 14439 / 16696 MiB,
 # each of which costs a full re-prefill (~216 t/s at depth) on the way back.

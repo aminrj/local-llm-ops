@@ -99,8 +99,12 @@ CTX=98304 UBATCH=1024 codemode
 CACHE_RAM=0 beellama                    # revert to the previous beellama behaviour
 QUANT=UD-Q3_K_XL CTX=131072 qwen38      # the 3-bit fallback
 SPEC=none qwen38                        # measure what MTP is actually buying
-EFFORT=medium qwen38                    # shorter thinking traces
+EFFORT=xhigh qwen38                     # longer thinking traces (was the default)
+llm 38 low                              # same knob, positional
 ```
+
+`llm 38` also takes the effort as a positional argument, validated *before*
+`codeoff` runs so a typo cannot cost you a live server.
 
 ---
 
@@ -459,6 +463,36 @@ pi, under `providers`:
 `supportsReasoningEffort` is `true` because it was checked, not assumed: the
 same prompt at `low` produced 270 characters of reasoning and at `xhigh` 1040,
 with the same final answer.
+
+### Reasoning effort defaults to medium
+
+The chat template's own default is `xhigh`, and that — not the model — is most
+of why the dense 27B felt slow next to the MoE. Per-turn, from the logs:
+
+| | Qwen3.8-27B (xhigh) | Qwen3.6-35B-A3B |
+|---|---|---|
+| wall seconds/turn, p50 | 13.2 | 4.0 |
+| p90 | 68.0 | 20.7 |
+| generated tokens/turn, p50 | 385 | 192 |
+| mean | 897 | 484 |
+
+3.3x slower end to end, while decode is only ~1.3x slower (42 vs 54 tok/s at
+depth). The gap is tokens emitted, not tokens per second: at `xhigh` the dense
+model writes about twice as much per turn, nearly all of it reasoning trace.
+
+`run-qwen3.8-27b.sh` therefore defaults `EFFORT` to `medium`. Override per
+launch with `llm 38 <level>` or `EFFORT=<level> llm 38`.
+
+This is deliberately **not** set client-side. `--reasoning-effort` sets the
+server default and llama.cpp still honours a per-request `reasoning_effort`
+field, so putting a level in the opencode or pi config would silently override
+whatever `llm 38` was started with. Leaving the clients quiet keeps the launch
+command the single place that decides.
+
+It applies to the 27B alone: only the `~/llama.cpp-38` build has the flag. The
+pinned build that serves the 35B and the MTP candidate has no
+`--reasoning-effort` at all, which is why `llm code` and `llm mtp` reject an
+argument instead of pretending to accept one.
 
 ### Making opencode compact before the server errors
 
