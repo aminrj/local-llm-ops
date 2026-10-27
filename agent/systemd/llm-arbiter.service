@@ -1,0 +1,13 @@
+[Unit]
+Description=GPU arbiter: lends the RTX 3090 to the assistant when you are not using it
+After=default.target
+
+[Service]
+Type=simple
+EnvironmentFile=-%h/.config/llm-agent/arbiter.env
+ExecStart=/usr/bin/python3 @REPO@/scripts/arbiter.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

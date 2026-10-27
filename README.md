@@ -323,6 +323,9 @@ driver with `codemode` afterwards.
 ```
 local-llm-ops/
 ├── Makefile
+├── agent/                              # Caddyfile (mTLS :8443) + systemd user units
+├── windows/setup.ps1                   # firewall, stay-awake, WSL at logon, wake-on-LAN prep
+├── tests/test_arbiter.py               # the arbiter's policy, as tests
 ├── results/                            # benchmark output
 └── scripts/
     ├── build-llamacpp.sh               # build upstream llama-server (CUDA, sm_86)
@@ -334,7 +337,10 @@ local-llm-ops/
     ├── run-qwen3.6-35b-a3b-mtp.sh      # :8083  A/B candidate
     ├── run-beellama-qwen3.6-27b.sh     # :8082  beellama
     ├── run-qwen3.8-27b.sh              # :8082  dense 27B, upstream + MTP
-    ├── llm.sh                          # switch model in one command, status
+    ├── run-agent.sh                    # :8090  assistant profile (127.0.0.1, 2 slots, API key)
+    ├── arbiter.py                      # who has the GPU: you or the assistant
+    ├── agent-setup.sh                  # caddy + user units for agent mode
+    ├── llm.sh                          # switch model in one command, status, desk/agent
     ├── codeoff.sh                      # stop everything, wait for VRAM
     ├── _wait-ready.sh                  # poll /health, report VRAM headroom
     ├── bench-ctx.py                    # throughput vs context depth
@@ -643,7 +649,56 @@ Client-side you still have to pick the matching model, since the port decides
 which one is actually there.
 
 Servers bind `0.0.0.0` with no API key, so anything on your network can reach
-them. That is fine behind WSL2's NAT; think twice on a shared network.
+them. That is fine behind WSL2's NAT. With mirrored networking (which this box
+uses for Tailscale) the Hyper-V firewall decides instead: `windows/setup.ps1`
+reports whether 8081-8083 are reachable from the house network, and
+`-Apply -BlockInbound` closes them. The agent server binds `127.0.0.1` only.
+
+---
+
+## Agent mode: lending the GPU to the personal assistant
+
+The homelab's personal assistant (Hermes, designed in
+`homelab-foundation/docs/assistant.md`) uses the same Qwen3.8-27B as `llm 38`,
+but only when you are not using the card. Three pieces, all user-level:
+
+| Piece | What it does |
+|---|---|
+| `scripts/run-agent.sh` | The agent profile of `run-qwen3.8-27b.sh`: `127.0.0.1:8090`, `--parallel 2`, alias `qwen3.8-27b-agent`, API key, effort `low` by default, log `agent.log`. |
+| `scripts/arbiter.py` (`llm-arbiter` unit) | Decides who has the GPU. Starts the agent server only after the card has been free for 10 minutes (2 when the assistant is waiting), stops it when ComfyUI starts or a hold is set. HTTP on `127.0.0.1:8091`. |
+| `agent/Caddyfile` (`llm-agent-proxy` unit) | `:8443` with mutual TLS: only the assistant VMs, holding a client certificate from the assistant's private CA, get in. `/v1/*` goes to the model, `/arbiter/*` to the arbiter. |
+
+**Your work always wins, mostly for free.** `llm 38`, `llm code`, `llm bee`,
+`llm mtp` and `llm off` run `codeoff` first, and `codeoff` stops every
+`llama-server`, the agent's included. The run scripts' guard then refuses to
+start anything while another server holds the GPU, and the arbiter's quiet window
+keeps the agent from slipping into the few seconds of a model switch.
+
+```bash
+llm desk 4     # keep the GPU for yourself for 4 hours (stops the agent's model)
+llm agent      # lift the hold; the agent loads its model now if nothing of yours runs
+llm status     # adds :8090 and the arbiter's state
+```
+
+Things the arbiter cannot see from WSL: GPU programs on the Windows side
+(ComfyUI for Windows, games). While the agent server is down it treats VRAM use
+above `VRAM_BUSY_MIB` as "someone else has the card"; while it is up, run
+`llm desk` before starting a Windows GPU program.
+
+Setup, in order (both check first and change nothing without the flag):
+
+```bash
+# in homelab-foundation: CA, server and client certificates, API key
+make assistant-pki ARGS=--yes
+# here: caddy, the two user units, lingering
+make agent-setup ARGS=--yes
+# Windows side, elevated PowerShell: :8443 from OPNsense only, stay awake, WSL at logon
+powershell.exe -ExecutionPolicy Bypass -File windows\setup.ps1 -Apply
+```
+
+`windows/setup.ps1 -Apply -Wol` prepares wake-on-LAN over the powerline adapter
+later (IP unbound from the Ethernet adapter so Wi-Fi stays the only network, magic
+packet on, Fast Startup off) and prints the MAC for homelab-foundation.
 
 ---
 

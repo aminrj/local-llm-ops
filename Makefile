@@ -31,6 +31,12 @@ help:
 	@echo "    make logs                    Tail codemode log"
 	@echo "    make logs-beellama           Tail beellama log"
 	@echo ""
+	@echo "  Assistant (agent mode, see README)"
+	@echo "    make agent-setup [ARGS=--yes] Caddy mTLS proxy + GPU arbiter as user units (check first)"
+	@echo "    make agent-status            Arbiter state, agent server, proxy"
+	@echo "    make agent-logs              Tail the arbiter and the agent model log"
+	@echo "    make test                    Arbiter policy tests"
+	@echo ""
 
 build-llamacpp:
 	bash scripts/build-llamacpp.sh
@@ -101,6 +107,19 @@ logs:
 logs-beellama:
 	@tail -f $(LOG_DIR)/beellama.log
 
+agent-setup:
+	bash scripts/agent-setup.sh $(ARGS)
+
+agent-status:
+	@curl -sf -m 3 http://127.0.0.1:8091/status && echo || echo "arbiter not running"
+	@systemctl --user --no-pager --lines=0 status llm-arbiter llm-agent-proxy || true
+
+agent-logs:
+	@journalctl --user -u llm-arbiter -n 50 --no-pager; tail -n 30 $(LOG_DIR)/agent.log 2>/dev/null || true
+
+test:
+	python3 tests/test_arbiter.py
+
 .PHONY: help build-llamacpp build-llamacpp-38 update-llamacpp download-qwen3.6 download-qwen3.6-mtp download-qwen3.8 \
         run-qwen3.6-35b-a3b run-beellama run-mtp run-qwen3.8-27b bench bench-ab \
-        stop wait status logs logs-beellama
+        stop wait status logs logs-beellama agent-setup agent-status agent-logs test
