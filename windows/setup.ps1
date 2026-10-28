@@ -34,7 +34,10 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $WslVmCreatorId = "{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}"   # fixed id of WSL in the Hyper-V firewall
-$RuleName = "LLM-Agent-TLS-from-OPNsense"
+# The port is in the name: a Hyper-V rule can't be changed or removed once created (Windows answers
+# "Access is denied" even elevated, seen 2026-10-28), so a new port means a new rule.
+$RuleName = "LLM-Agent-TLS-$Port-from-OPNsense"
+$OldRuleNames = @("LLM-Agent-TLS-from-OPNsense")   # 8443, before k3d took that port
 
 function Say($m) { Write-Host "`n== $m" -ForegroundColor Cyan }
 function Ok($m) { Write-Host "  ok: $m" -ForegroundColor Green }
@@ -66,42 +69,37 @@ try {
 
 # ---------- :8743 from OPNsense only (not 8443: k3d's load balancer uses it) ----------
 Say "TCP $Port from $OpnsenseWan only"
-$hvRule = Get-NetFirewallHyperVRule -Name $RuleName -ErrorAction SilentlyContinue
-if ($hvRule -and "$($hvRule.LocalPorts)" -ne "$Port") {
-  # The port moved (8443 clashed with a k3d load balancer, 2026-10-28): fix the rule in place.
-  # Set-NetFirewallHyperVRule answers "Access is denied" even elevated: remove and recreate.
-  if ($Apply) {
-    Remove-NetFirewallHyperVRule -Name $RuleName
-    New-NetFirewallHyperVRule -Name $RuleName -DisplayName "LLM agent TLS from OPNsense" -Direction Inbound `
-      -VMCreatorId $WslVmCreatorId -Protocol TCP -LocalPorts $Port -RemoteAddresses $OpnsenseWan -Action Allow | Out-Null
-    Ok "Hyper-V rule $RuleName now TCP $Port"
-  }
-  else { Would "change Hyper-V rule $RuleName from TCP $($hvRule.LocalPorts) to $Port" }
-}
-elseif ($hvRule) { Ok "Hyper-V rule $RuleName exists" }
+if (Get-NetFirewallHyperVRule -Name $RuleName -ErrorAction SilentlyContinue) { Ok "Hyper-V rule $RuleName exists" }
 elseif ($Apply) {
-  New-NetFirewallHyperVRule -Name $RuleName -DisplayName "LLM agent TLS from OPNsense" -Direction Inbound `
+  New-NetFirewallHyperVRule -Name $RuleName -DisplayName "LLM agent TLS $Port from OPNsense" -Direction Inbound `
     -VMCreatorId $WslVmCreatorId -Protocol TCP -LocalPorts $Port -RemoteAddresses $OpnsenseWan -Action Allow | Out-Null
   Ok "Hyper-V rule $RuleName created"
 } else { Would "create Hyper-V firewall rule $RuleName (TCP $Port from $OpnsenseWan)" }
 
-$fwRule = Get-NetFirewallRule -Name $RuleName -ErrorAction SilentlyContinue
-$fwPort = if ($fwRule) { "$(($fwRule | Get-NetFirewallPortFilter).LocalPort)" } else { "" }
-if ($fwRule -and $fwPort -ne "$Port") {
-  if ($Apply) {
-    Remove-NetFirewallRule -Name $RuleName
-    New-NetFirewallRule -Name $RuleName -DisplayName "LLM agent TLS from OPNsense" -Direction Inbound -Protocol TCP `
-      -LocalPort $Port -RemoteAddress $OpnsenseWan -Action Allow -Profile Any | Out-Null
-    Ok "Windows Defender rule $RuleName now TCP $Port"
-  }
-  else { Would "change Windows Defender rule $RuleName from TCP $fwPort to $Port" }
-}
-elseif ($fwRule) { Ok "Windows Defender rule $RuleName exists" }
+if (Get-NetFirewallRule -Name $RuleName -ErrorAction SilentlyContinue) { Ok "Windows Defender rule $RuleName exists" }
 elseif ($Apply) {
-  New-NetFirewallRule -Name $RuleName -DisplayName "LLM agent TLS from OPNsense" -Direction Inbound -Protocol TCP `
+  New-NetFirewallRule -Name $RuleName -DisplayName "LLM agent TLS $Port from OPNsense" -Direction Inbound -Protocol TCP `
     -LocalPort $Port -RemoteAddress $OpnsenseWan -Action Allow -Profile Any | Out-Null
   Ok "Windows Defender rule $RuleName created"
 } else { Would "create Windows Defender rule $RuleName (TCP $Port from $OpnsenseWan)" }
+
+# Rules for an old port: removed when Windows lets us, otherwise left (OPNsense only lets the lab
+# reach the current port, so an old allow rule opens nothing the lab can use).
+foreach ($old in $OldRuleNames) {
+  if (Get-NetFirewallRule -Name $old -ErrorAction SilentlyContinue) {
+    if ($Apply) { Remove-NetFirewallRule -Name $old; Ok "Windows Defender rule $old removed" }
+    else { Would "remove Windows Defender rule $old" }
+  }
+  if (Get-NetFirewallHyperVRule -Name $old -ErrorAction SilentlyContinue) {
+    if ($Apply) {
+      try { Remove-NetFirewallHyperVRule -Name $old -ErrorAction Stop; Ok "Hyper-V rule $old removed" }
+      catch {
+        try { Disable-NetFirewallHyperVRule -Name $old -ErrorAction Stop; Warn "Hyper-V rule $old could not be removed; disabled instead" }
+        catch { Warn "Hyper-V rule $old can't be removed or disabled ($($_.Exception.Message)); harmless: OPNsense only allows the lab to reach $Port" }
+      }
+    } else { Would "remove Hyper-V rule $old (or disable it, or warn)" }
+  }
+}
 
 # ---------- stay awake for now ----------
 Say "Power: stay awake on mains power (until wake-on-LAN works)"
