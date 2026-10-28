@@ -33,8 +33,21 @@ if [ "$(ps -p 1 -o comm= 2>/dev/null)" != "systemd" ]; then
 fi
 ok "systemd is PID 1"
 
-say "caddy"
-if command -v caddy >/dev/null; then
+say "caddy (official apt repo; Ubuntu 24.04's 2.6 lacks trust_pool and persist_config)"
+CADDY_KEYRING=/usr/share/keyrings/caddy-stable-archive-keyring.gpg
+CADDY_LIST=/etc/apt/sources.list.d/caddy-stable.list
+if [ -s "$CADDY_KEYRING" ] && [ -s "$CADDY_LIST" ]; then
+  ok "repo $CADDY_LIST"
+elif (( YES )); then
+  curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key | sudo gpg --dearmor --yes -o "$CADDY_KEYRING"
+  curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt | sudo tee "$CADDY_LIST" >/dev/null
+  sudo chmod o+r "$CADDY_KEYRING" "$CADDY_LIST"
+  sudo apt-get update -q
+else
+  todo "add the Caddy stable apt repo ($CADDY_LIST, key from dl.cloudsmith.io)"
+fi
+caddy_ver="$(caddy version 2>/dev/null | sed -E 's/^v?([0-9]+)\.([0-9]+).*/\1 \2/')"
+if [ -n "$caddy_ver" ] && read -r cmaj cmin <<<"$caddy_ver" && (( cmaj > 2 || (cmaj == 2 && cmin >= 8) )); then
   ok "$(caddy version | head -1)"
 else
   run sudo apt-get install -y caddy
