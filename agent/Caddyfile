@@ -9,6 +9,11 @@
 	admin off
 	auto_https off
 	persist_config off
+	# Clients dial the IP (https://192.168.0.12:8743), so they send no SNI. client_auth turns on
+	# strict SNI/Host matching, which then answers 421; with a single site it guards nothing.
+	servers {
+		strict_sni_host insecure_off
+	}
 }
 
 :8743 {
