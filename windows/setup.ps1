@@ -69,7 +69,13 @@ Say "TCP $Port from $OpnsenseWan only"
 $hvRule = Get-NetFirewallHyperVRule -Name $RuleName -ErrorAction SilentlyContinue
 if ($hvRule -and "$($hvRule.LocalPorts)" -ne "$Port") {
   # The port moved (8443 clashed with a k3d load balancer, 2026-10-28): fix the rule in place.
-  if ($Apply) { Set-NetFirewallHyperVRule -Name $RuleName -LocalPorts $Port; Ok "Hyper-V rule $RuleName now TCP $Port" }
+  # Set-NetFirewallHyperVRule answers "Access is denied" even elevated: remove and recreate.
+  if ($Apply) {
+    Remove-NetFirewallHyperVRule -Name $RuleName
+    New-NetFirewallHyperVRule -Name $RuleName -DisplayName "LLM agent TLS from OPNsense" -Direction Inbound `
+      -VMCreatorId $WslVmCreatorId -Protocol TCP -LocalPorts $Port -RemoteAddresses $OpnsenseWan -Action Allow | Out-Null
+    Ok "Hyper-V rule $RuleName now TCP $Port"
+  }
   else { Would "change Hyper-V rule $RuleName from TCP $($hvRule.LocalPorts) to $Port" }
 }
 elseif ($hvRule) { Ok "Hyper-V rule $RuleName exists" }
@@ -82,7 +88,12 @@ elseif ($Apply) {
 $fwRule = Get-NetFirewallRule -Name $RuleName -ErrorAction SilentlyContinue
 $fwPort = if ($fwRule) { "$(($fwRule | Get-NetFirewallPortFilter).LocalPort)" } else { "" }
 if ($fwRule -and $fwPort -ne "$Port") {
-  if ($Apply) { Set-NetFirewallRule -Name $RuleName -LocalPort $Port; Ok "Windows Defender rule $RuleName now TCP $Port" }
+  if ($Apply) {
+    Remove-NetFirewallRule -Name $RuleName
+    New-NetFirewallRule -Name $RuleName -DisplayName "LLM agent TLS from OPNsense" -Direction Inbound -Protocol TCP `
+      -LocalPort $Port -RemoteAddress $OpnsenseWan -Action Allow -Profile Any | Out-Null
+    Ok "Windows Defender rule $RuleName now TCP $Port"
+  }
   else { Would "change Windows Defender rule $RuleName from TCP $fwPort to $Port" }
 }
 elseif ($fwRule) { Ok "Windows Defender rule $RuleName exists" }
