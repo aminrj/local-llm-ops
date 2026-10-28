@@ -4,7 +4,7 @@ set -euo pipefail
 # The personal assistant's model server: the same Qwen3.8-27B build and quant as
 # `llm 38`, with a profile of its own.
 #
-#   - 127.0.0.1 only. The assistant VMs reach it through Caddy on :8443 with
+#   - 127.0.0.1 only. The assistant VMs reach it through Caddy on :8743 with
 #     mutual TLS (agent/Caddyfile), never directly.
 #   - Two slots: the Inside and Outside agents can run at the same time. They
 #     share the one unified KV cache, so one long job leaves less for the other.

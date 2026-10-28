@@ -9,7 +9,7 @@
     ... -Apply -Wol    # also prepare wake-on-LAN over the powerline adapter (later step)
 
   What -Apply does:
-    1. Lets TCP 8443 in from OPNsense's house address only (192.168.0.2), in both the
+    1. Lets TCP 8743 in from OPNsense's house address only (192.168.0.2), in both the
        Hyper-V firewall (WSL mirrored networking) and Windows Defender Firewall.
     2. Keeps the PC awake on mains power (no sleep, no hibernate) until wake-on-LAN works.
     3. Keeps the WSL VM alive when no terminal is open (.wslconfig vmIdleTimeout=-1)
@@ -29,7 +29,7 @@ param(
   [switch]$Wol,
   [switch]$BlockInbound,
   [string]$OpnsenseWan = "192.168.0.2",
-  [int]$Port = 8443,
+  [int]$Port = 8743,
   [string]$Distro = ""
 )
 $ErrorActionPreference = "Stop"
@@ -50,7 +50,7 @@ Say "WSL networking mode"
 $wslconfig = Join-Path $env:USERPROFILE ".wslconfig"
 $cfg = if (Test-Path $wslconfig) { Get-Content $wslconfig -Raw } else { "" }
 if ($cfg -match "(?im)^\s*networkingMode\s*=\s*mirrored") { Ok "mirrored (WSL listeners share the Windows addresses)" }
-else { Warn "not mirrored: the rule below covers mirrored mode; in NAT mode :8443 in WSL is not reachable from the LAN at all. homelab-foundation CLAUDE.md says this machine uses mirrored mode: check $wslconfig." }
+else { Warn "not mirrored: the rule below covers mirrored mode; in NAT mode :8743 in WSL is not reachable from the LAN at all. homelab-foundation CLAUDE.md says this machine uses mirrored mode: check $wslconfig." }
 
 Say "Hyper-V firewall default for WSL (inbound)"
 try {
@@ -64,10 +64,15 @@ try {
   } else { Ok "default inbound: $($hv.DefaultInboundAction)" }
 } catch { Warn "could not read the Hyper-V firewall settings ($($_.Exception.Message)); older Windows build?" }
 
-# ---------- :8443 from OPNsense only ----------
+# ---------- :8743 from OPNsense only (not 8443: k3d's load balancer uses it) ----------
 Say "TCP $Port from $OpnsenseWan only"
 $hvRule = Get-NetFirewallHyperVRule -Name $RuleName -ErrorAction SilentlyContinue
-if ($hvRule) { Ok "Hyper-V rule $RuleName exists" }
+if ($hvRule -and "$($hvRule.LocalPorts)" -ne "$Port") {
+  # The port moved (8443 clashed with a k3d load balancer, 2026-10-28): fix the rule in place.
+  if ($Apply) { Set-NetFirewallHyperVRule -Name $RuleName -LocalPorts $Port; Ok "Hyper-V rule $RuleName now TCP $Port" }
+  else { Would "change Hyper-V rule $RuleName from TCP $($hvRule.LocalPorts) to $Port" }
+}
+elseif ($hvRule) { Ok "Hyper-V rule $RuleName exists" }
 elseif ($Apply) {
   New-NetFirewallHyperVRule -Name $RuleName -DisplayName "LLM agent TLS from OPNsense" -Direction Inbound `
     -VMCreatorId $WslVmCreatorId -Protocol TCP -LocalPorts $Port -RemoteAddresses $OpnsenseWan -Action Allow | Out-Null
@@ -75,7 +80,12 @@ elseif ($Apply) {
 } else { Would "create Hyper-V firewall rule $RuleName (TCP $Port from $OpnsenseWan)" }
 
 $fwRule = Get-NetFirewallRule -Name $RuleName -ErrorAction SilentlyContinue
-if ($fwRule) { Ok "Windows Defender rule $RuleName exists" }
+$fwPort = if ($fwRule) { "$(($fwRule | Get-NetFirewallPortFilter).LocalPort)" } else { "" }
+if ($fwRule -and $fwPort -ne "$Port") {
+  if ($Apply) { Set-NetFirewallRule -Name $RuleName -LocalPort $Port; Ok "Windows Defender rule $RuleName now TCP $Port" }
+  else { Would "change Windows Defender rule $RuleName from TCP $fwPort to $Port" }
+}
+elseif ($fwRule) { Ok "Windows Defender rule $RuleName exists" }
 elseif ($Apply) {
   New-NetFirewallRule -Name $RuleName -DisplayName "LLM agent TLS from OPNsense" -Direction Inbound -Protocol TCP `
     -LocalPort $Port -RemoteAddress $OpnsenseWan -Action Allow -Profile Any | Out-Null

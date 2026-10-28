@@ -8,7 +8,7 @@ set -euo pipefail
 #   make agent-setup ARGS=--yes   # apply
 #
 # What it sets up (all user-level, nothing touches your desk servers):
-#   - caddy (apt) for the mutual-TLS front end on :8443; the system unit stays off
+#   - caddy (apt) for the mutual-TLS front end on :8743; the system unit stays off
 #   - systemd user units llm-arbiter and llm-agent-proxy, rendered for this repo path
 #   - lingering for your user, so the units run without a login shell
 #   - ~/.config/llm-agent/arbiter.env with the defaults (edit it, then restart the unit)

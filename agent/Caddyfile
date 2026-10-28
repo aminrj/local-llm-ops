@@ -4,14 +4,14 @@
 # from homelab-foundation (`make assistant-pki`) into $AGENT_TLS_DIR.
 #
 # Started by agent/systemd/llm-agent-proxy.service (`make agent-setup`).
-# Windows lets :8443 in from OPNsense's house address only (windows/setup.ps1).
+# Windows lets :8743 in from OPNsense's house address only (windows/setup.ps1).
 {
 	admin off
 	auto_https off
 	persist_config off
 }
 
-:8443 {
+:8743 {
 	tls {$AGENT_TLS_DIR}/server.crt {$AGENT_TLS_DIR}/server.key {
 		protocols tls1.3
 		client_auth {

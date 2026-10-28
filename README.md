@@ -323,7 +323,7 @@ driver with `codemode` afterwards.
 ```
 local-llm-ops/
 ├── Makefile
-├── agent/                              # Caddyfile (mTLS :8443) + systemd user units
+├── agent/                              # Caddyfile (mTLS :8743) + systemd user units
 ├── windows/setup.ps1                   # firewall, stay-awake, WSL at logon, wake-on-LAN prep
 ├── tests/test_arbiter.py               # the arbiter's policy, as tests
 ├── results/                            # benchmark output
@@ -666,7 +666,7 @@ but only when you are not using the card. Three pieces, all user-level:
 |---|---|
 | `scripts/run-agent.sh` | The agent profile of `run-qwen3.8-27b.sh`: `127.0.0.1:8090`, `--parallel 2`, alias `qwen3.8-27b-agent`, API key, effort `low` by default, log `agent.log`. |
 | `scripts/arbiter.py` (`llm-arbiter` unit) | Decides who has the GPU. Starts the agent server only after the card has been free for 10 minutes (2 when the assistant is waiting), stops it when ComfyUI starts or a hold is set. HTTP on `127.0.0.1:8091`. |
-| `agent/Caddyfile` (`llm-agent-proxy` unit) | `:8443` with mutual TLS: only the assistant VMs, holding a client certificate from the assistant's private CA, get in. `/v1/*` goes to the model, `/arbiter/*` to the arbiter. |
+| `agent/Caddyfile` (`llm-agent-proxy` unit) | `:8743` with mutual TLS: only the assistant VMs, holding a client certificate from the assistant's private CA, get in. `/v1/*` goes to the model, `/arbiter/*` to the arbiter. |
 
 **Your work always wins, mostly for free.** `llm 38`, `llm code`, `llm bee`,
 `llm mtp` and `llm off` run `codeoff` first, and `codeoff` stops every
@@ -692,7 +692,7 @@ Setup, in order (both check first and change nothing without the flag):
 make assistant-pki ARGS=--yes
 # here: caddy, the two user units, lingering
 make agent-setup ARGS=--yes
-# Windows side, elevated PowerShell: :8443 from OPNsense only, stay awake, WSL at logon
+# Windows side, elevated PowerShell: :8743 from OPNsense only, stay awake, WSL at logon
 powershell.exe -ExecutionPolicy Bypass -File windows\setup.ps1 -Apply
 ```
 
