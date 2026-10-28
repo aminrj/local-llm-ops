@@ -1,0 +1,13 @@
+[Unit]
+Description=Mutual-TLS front end for the assistant's model server (Caddy on :8443)
+After=network-online.target
+
+[Service]
+Type=simple
+Environment=AGENT_TLS_DIR=%h/.config/llm-agent/tls
+ExecStart=/usr/bin/caddy run --config @REPO@/agent/Caddyfile --adapter caddyfile
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

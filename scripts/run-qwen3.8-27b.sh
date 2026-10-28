@@ -65,6 +65,13 @@ fi
 CACHE_RAM="${CACHE_RAM:-12288}"
 LOG_FILE="${LOG_FILE:-$LOG_DIR/qwen38.log}"
 SERVER="${SERVER:-$HOME/llama.cpp-38/build/bin/llama-server}"
+# Defaults keep the desk server exactly as it was. The assistant profile
+# (scripts/run-agent.sh) overrides these: loopback only, two slots, its own
+# alias, and an API key so only the TLS front end (Caddy, agent/) can use it.
+HOST="${HOST:-0.0.0.0}"
+PARALLEL="${PARALLEL:-1}"
+ALIAS="${ALIAS:-qwen3.8-27b}"
+API_KEY_FILE="${API_KEY_FILE:-}"
 
 MODEL_FILE="$MODEL_DIR/Qwen3.8-27B-$QUANT.gguf"
 
@@ -103,14 +110,21 @@ if [[ "$SPEC" != "none" && "$SPEC" != "off" ]]; then
   fi
 fi
 
-echo "model=$(basename "$MODEL_FILE") ctx=$CTX ub=$UBATCH spec=$SPEC effort=$EFFORT"
+AUTH_ARGS=()
+if [ -n "$API_KEY_FILE" ]; then
+  [ -r "$API_KEY_FILE" ] || { echo "ERROR: API_KEY_FILE $API_KEY_FILE is not readable." >&2; exit 1; }
+  AUTH_ARGS=(--api-key-file "$API_KEY_FILE")
+fi
+
+echo "model=$(basename "$MODEL_FILE") ctx=$CTX ub=$UBATCH spec=$SPEC effort=$EFFORT host=$HOST port=$PORT parallel=$PARALLEL"
 
 nohup "$SERVER" \
   --model  "$MODEL_FILE" \
   --mmproj "$MODEL_DIR/mmproj-F16.gguf" \
   --no-mmproj-offload \
-  --alias  "qwen3.8-27b" \
-  --port "$PORT" --host 0.0.0.0 \
+  --alias  "$ALIAS" \
+  --port "$PORT" --host "$HOST" \
+  ${AUTH_ARGS[@]+"${AUTH_ARGS[@]}"} \
   --ctx-size "$CTX" \
   --n-gpu-layers 99 \
   "${SPEC_ARGS[@]}" \
@@ -126,7 +140,7 @@ nohup "$SERVER" \
   --reasoning-effort "$EFFORT" \
   --reasoning-preserve \
   -n 32768 \
-  --parallel 1 \
+  --parallel "$PARALLEL" \
   -to 3600 \
   >>"$LOG_FILE" 2>&1 < /dev/null &
 

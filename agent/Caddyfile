@@ -1,0 +1,57 @@
+# TLS front end for the assistant's model server (scripts/run-agent.sh) and the
+# GPU arbiter. Only clients holding a certificate from the assistant's private CA
+# get in (mutual TLS): the assistant VM and the scout VM. The certificates come
+# from homelab-foundation (`make assistant-pki`) into $AGENT_TLS_DIR.
+#
+# Started by agent/systemd/llm-agent-proxy.service (`make agent-setup`).
+# Windows lets :8743 in from OPNsense's house address only (windows/setup.ps1).
+{
+	admin off
+	auto_https off
+	persist_config off
+	# Clients dial the IP (https://192.168.0.12:8743), so they send no SNI. client_auth turns on
+	# strict SNI/Host matching, which then answers 421; with a single site it guards nothing.
+	servers {
+		strict_sni_host insecure_off
+	}
+}
+
+:8743 {
+	tls {$AGENT_TLS_DIR}/server.crt {$AGENT_TLS_DIR}/server.key {
+		protocols tls1.3
+		client_auth {
+			mode require_and_verify
+			trust_pool file {$AGENT_TLS_DIR}/ca.crt
+		}
+	}
+
+	# GPU arbiter: status, demand, hold/release (scripts/arbiter.py).
+	handle_path /arbiter/* {
+		reverse_proxy 127.0.0.1:8091
+	}
+
+	# The model: OpenAI-compatible API and health. Streaming answers pass straight through.
+	handle /v1/* {
+		reverse_proxy 127.0.0.1:8090 {
+			flush_interval -1
+			transport http {
+				response_header_timeout 900s
+			}
+		}
+	}
+	handle /health {
+		reverse_proxy 127.0.0.1:8090
+	}
+
+	handle {
+		respond 404
+	}
+
+	log {
+		output file {$HOME}/.local/share/llama-logs/agent-proxy.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+		format json
+	}
+}

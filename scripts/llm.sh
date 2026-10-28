@@ -17,8 +17,10 @@ running by accident.
   llm code          Qwen3.6-35B-A3B MoE :8081   llamacpp/qwen3.6-35b-a3b
   llm mtp           Qwen3.6-35B-A3B MTP :8083   llamacpp-mtp/qwen3.6-35b-a3b-mtp
   llm bee           Qwen3.6-27B DFlash  :8082   beellama/qwen3.6-27b-dflash
-  llm off           stop everything
-  llm status        what is running, on which port, and free VRAM
+  llm off           stop everything (the assistant may take the GPU after 10 min)
+  llm desk [hours]  keep the GPU for yourself (default 4 h): stops the assistant's model
+  llm agent         lift the hold and let the assistant load its model now
+  llm status        what is running, on which port, free VRAM, and the arbiter's state
 
 Reasoning effort applies to `llm 38` only — it is the one model on a build
 with --reasoning-effort. It defaults to medium; the template's own default is
@@ -36,7 +38,7 @@ status() {
   # -m is not optional here: on this box a connection to a closed port hangs
   # until it times out rather than being refused, so an un-timed probe stalls
   # for as long as curl will wait.
-  for port in 8081 8082 8083; do
+  for port in 8081 8082 8083 8090; do
     if curl -sf -m 2 "http://127.0.0.1:$port/health" >/dev/null 2>&1; then
       local alias_name
       alias_name=$(curl -sf -m 2 "http://127.0.0.1:$port/v1/models" 2>/dev/null \
@@ -46,6 +48,10 @@ status() {
     fi
   done
   (( found )) || echo "  nothing serving"
+  local arb
+  arb=$(curl -sf -m 2 "http://127.0.0.1:8091/status" 2>/dev/null \
+    | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["state"] + ": " + d["reason"])' 2>/dev/null)
+  echo "  arbiter: ${arb:-not running (make agent-setup)}"
   if command -v nvidia-smi &>/dev/null; then
     read -r used total < <(nvidia-smi --query-gpu=memory.used,memory.total \
       --format=csv,noheader,nounits -i 0 | tr -d ',')
@@ -87,6 +93,15 @@ target="${1:-status}"
 case "$target" in
   status|st)      echo "Serving:"; status ;;
   off|stop)       exec bash "$HERE/codeoff.sh" ;;
+  desk)           shift; hours="${1:-4}"
+                  [[ "$hours" =~ ^[0-9]+([.][0-9]+)?$ ]] || { echo "ERROR: 'llm desk' takes hours, e.g. llm desk 4" >&2; exit 1; }
+                  curl -sf -m 30 -X POST -H 'Content-Type: application/json' -d "{\"hours\": $hours}" \
+                    http://127.0.0.1:8091/hold >/dev/null || { echo "ERROR: arbiter not running (make agent-setup)" >&2; exit 1; }
+                  echo "GPU held for you for ${hours} h; the assistant's model is stopped."; status ;;
+  agent)          shift; no_args "agent" "$@"
+                  curl -sf -m 30 -X POST http://127.0.0.1:8091/release >/dev/null \
+                    || { echo "ERROR: arbiter not running (make agent-setup)" >&2; exit 1; }
+                  echo "Hold lifted; the assistant loads its model if nothing of yours is running."; status ;;
   38|qwen38|3.8)  shift; check_effort "$@"
                   bash "$HERE/codeoff.sh" >/dev/null 2>&1
                   exec bash "$HERE/run-qwen3.8-27b.sh" "$@" ;;
