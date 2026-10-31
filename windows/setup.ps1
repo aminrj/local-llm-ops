@@ -7,6 +7,8 @@
     powershell.exe -ExecutionPolicy Bypass -File windows\setup.ps1            # check only
     powershell.exe -ExecutionPolicy Bypass -File windows\setup.ps1 -Apply     # apply
     ... -Apply -Wol    # also prepare wake-on-LAN over the powerline adapter (later step)
+    ... -Apply -AtBoot # start WSL at boot, without anyone signing in (asks for your password once)
+    ... -Apply -RemoteShutdown   # let sshd in WSL (port 2222) in from the tailnet only
 
   What -Apply does:
     1. Lets TCP 8743 in from OPNsense's house address only (192.168.0.2), in both the
@@ -18,7 +20,14 @@
     4. The Ethernet adapter (powerline) carries no IP traffic: IPv4/IPv6 unbound, so
        Wi-Fi stays the only network. The NIC itself still listens for magic packets.
     5. Wake on Magic Packet on, Fast Startup off (it breaks wake from shutdown).
-    Prints the Ethernet MAC for homelab-foundation's inventory (house.ai_desktop_eth_mac).
+    Prints the Ethernet MAC for homelab-foundation's inventory (wake_on_lan.mac).
+  With -AtBoot:
+    6. The WSL task starts at boot instead of at logon, "whether the user is logged on or not",
+       and runs a session that never ends (sleep infinity), so after a wake-on-LAN systemd runs
+       the arbiter and the proxy without anyone signing in. No 72-hour run limit.
+  With -RemoteShutdown:
+    7. TCP 2222 (sshd in WSL, scripts/agent-setup.sh) in from the tailnet (100.64.0.0/10) only.
+  Also turn on Tailscale's "Run unattended" (tray icon, Settings) so the tailnet is up before sign-in.
 
   It also reports whether your desk llama servers (8081-8083, no API key) are reachable
   from the house network. They should not be; -Apply -BlockInbound closes that (opt-in,
@@ -28,6 +37,9 @@ param(
   [switch]$Apply,
   [switch]$Wol,
   [switch]$BlockInbound,
+  [switch]$AtBoot,
+  [switch]$RemoteShutdown,
+  [string]$Tailnet = "100.64.0.0/10",
   [string]$OpnsenseWan = "192.168.0.2",
   [int]$Port = 8743,
   [string]$Distro = ""
@@ -120,8 +132,27 @@ elseif ($Apply) {
   Ok "added vmIdleTimeout=-1 (takes effect after 'wsl --shutdown')"
 } else { Would "add vmIdleTimeout=-1 under [wsl2] in $wslconfig" }
 
-$task = Get-ScheduledTask -TaskName "WSL autostart (llm agent)" -ErrorAction SilentlyContinue
-if ($task) { Ok "scheduled task 'WSL autostart (llm agent)' exists" }
+$TaskName = "WSL autostart (llm agent)"
+$task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+$atBootNow = $task -and ($task.Triggers | Where-Object { $_.CimClass.CimClassName -eq "MSFT_TaskBootTrigger" })
+if ($AtBoot) {
+  if ($atBootNow) { Ok "scheduled task '$TaskName' starts at boot" }
+  elseif ($Apply) {
+    $cred = Get-Credential -UserName "$env:USERDOMAIN\$env:USERNAME" -Message "Your Windows password: the task runs WSL at boot, before anyone signs in"
+    if ($task) { Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false }
+    $keep = 'exec sleep infinity'
+    $wslArgs = if ($Distro) { "-d $Distro --exec /bin/sh -c `"$keep`"" } else { "--exec /bin/sh -c `"$keep`"" }
+    $action = New-ScheduledTaskAction -Execute "wsl.exe" -Argument $wslArgs
+    $trigger = New-ScheduledTaskTrigger -AtStartup
+    $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries `
+      -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings `
+      -User $cred.UserName -Password $cred.GetNetworkCredential().Password -RunLevel Limited `
+      -Description "Boots WSL at startup (no sign-in needed) and keeps it up, so systemd runs llm-arbiter and llm-agent-proxy (local-llm-ops)." | Out-Null
+    Ok "task '$TaskName' now starts WSL at boot and keeps it running (test: reboot without signing in)"
+  } else { Would "re-register '$TaskName': at startup, whether logged on or not, 'wsl.exe --exec sh -c ""exec sleep infinity""', no time limit (asks for your password)" }
+}
+elseif ($task) { Ok "scheduled task '$TaskName' exists$(if ($atBootNow) { ' (at boot)' } else { ' (at logon; -AtBoot starts it without sign-in)' })" }
 elseif ($Apply) {
   $wslArgs = if ($Distro) { "-d $Distro --exec /bin/true" } else { "--exec /bin/true" }
   $action = New-ScheduledTaskAction -Execute "wsl.exe" -Argument $wslArgs
@@ -130,6 +161,24 @@ elseif ($Apply) {
     -Description "Boots WSL at logon so systemd starts llm-arbiter and llm-agent-proxy (local-llm-ops)." | Out-Null
   Ok "scheduled task created (at logon of $env:USERNAME). After a reboot, someone must sign in, or turn on automatic sign-in."
 } else { Would "register a logon task that runs 'wsl.exe --exec /bin/true'" }
+
+# ---------- remote shutdown: sshd in WSL on 2222, from the tailnet only ----------
+if ($RemoteShutdown) {
+  Say "TCP 2222 (sshd in WSL) from the tailnet $Tailnet only"
+  $SshRule = "WSL-SSH-2222-from-tailnet"
+  if (Get-NetFirewallHyperVRule -Name $SshRule -ErrorAction SilentlyContinue) { Ok "Hyper-V rule $SshRule exists" }
+  elseif ($Apply) {
+    New-NetFirewallHyperVRule -Name $SshRule -DisplayName "WSL sshd 2222 from the tailnet" -Direction Inbound `
+      -VMCreatorId $WslVmCreatorId -Protocol TCP -LocalPorts 2222 -RemoteAddresses $Tailnet -Action Allow | Out-Null
+    Ok "Hyper-V rule $SshRule created"
+  } else { Would "create Hyper-V firewall rule $SshRule (TCP 2222 from $Tailnet)" }
+  if (Get-NetFirewallRule -Name $SshRule -ErrorAction SilentlyContinue) { Ok "Windows Defender rule $SshRule exists" }
+  elseif ($Apply) {
+    New-NetFirewallRule -Name $SshRule -DisplayName "WSL sshd 2222 from the tailnet" -Direction Inbound -Protocol TCP `
+      -LocalPort 2222 -RemoteAddress $Tailnet -Action Allow -Profile Any | Out-Null
+    Ok "Windows Defender rule $SshRule created"
+  } else { Would "create Windows Defender rule $SshRule (TCP 2222 from $Tailnet)" }
+}
 
 # ---------- wake-on-LAN over powerline (later) ----------
 if ($Wol) {
@@ -156,7 +205,7 @@ if ($Wol) {
     Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" -Name HiberbootEnabled -Value 0
     Ok "magic packet wake armed; Fast Startup off"
   } else { Would "arm the adapter for magic-packet wake and turn Fast Startup off" }
-  Write-Host "`n  Put this in homelab-foundation inventory/network.yml: house.ai_desktop_eth_mac: $($eth.MacAddress -replace '-', ':')"
+  Write-Host "`n  Put this in homelab-foundation inventory/network.yml: wake_on_lan.mac: $($eth.MacAddress -replace '-', ':')"
   Write-Host "  BIOS (by hand): Wake on LAN / Power on by PCI-E = Enabled, ErP = Disabled."
 }
 
