@@ -138,15 +138,18 @@ $atBootNow = $task -and ($task.Triggers | Where-Object { $_.CimClass.CimClassNam
 if ($AtBoot) {
   if ($atBootNow) { Ok "scheduled task '$TaskName' starts at boot" }
   elseif ($Apply) {
-    $cred = Get-Credential -UserName "$env:USERDOMAIN\$env:USERNAME" -Message "Your Windows password: the task runs WSL at boot, before anyone signs in"
-    if ($task) { Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false }
+    # A Microsoft-account sign-in needs that account's password here, not the Windows Hello PIN
+    # (the PIN gives "The user name or password is incorrect", seen 2026-11-01).
+    $cred = Get-Credential -UserName "$env:USERDOMAIN\$env:USERNAME" -Message "Your Windows account PASSWORD (Microsoft account: its password, not the PIN). The task runs WSL at boot, before anyone signs in."
     $keep = 'exec sleep infinity'
     $wslArgs = if ($Distro) { "-d $Distro --exec /bin/sh -c `"$keep`"" } else { "--exec /bin/sh -c `"$keep`"" }
     $action = New-ScheduledTaskAction -Execute "wsl.exe" -Argument $wslArgs
     $trigger = New-ScheduledTaskTrigger -AtStartup
     $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries `
       -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
-    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings `
+    # -Force replaces the existing task in one step: a wrong password leaves the old task in place
+    # (unregistering first lost it, 2026-11-01).
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Force `
       -User $cred.UserName -Password $cred.GetNetworkCredential().Password -RunLevel Limited `
       -Description "Boots WSL at startup (no sign-in needed) and keeps it up, so systemd runs llm-arbiter and llm-agent-proxy (local-llm-ops)." | Out-Null
     Ok "task '$TaskName' now starts WSL at boot and keeps it running (test: reboot without signing in)"
