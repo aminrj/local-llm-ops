@@ -195,12 +195,16 @@ if ($Wol) {
     elseif ($Apply) { Disable-NetAdapterBinding -Name $eth.Name -ComponentID $c; Ok "$c unbound (Wi-Fi stays the only network)" }
     else { Would "unbind $c from $($eth.Name)" }
   }
-  foreach ($p in "Wake on Magic Packet", "Shutdown Wake-On-Lan", "Wake on magic packet when system is in the S0ix power state") {
-    $prop = Get-NetAdapterAdvancedProperty -Name $eth.Name -DisplayName $p -ErrorAction SilentlyContinue
+  # By registry keyword and value: display names and values follow the Windows language
+  # ("Aktiverad" on a Swedish install, seen 2026-11-01). 1 = enabled for these on/off keywords.
+  foreach ($k in "*WakeOnMagicPacket", "S5WakeOnLan", "*ModernStandbyWoLMagicPacket") {
+    $prop = Get-NetAdapterAdvancedProperty -Name $eth.Name -RegistryKeyword $k -ErrorAction SilentlyContinue
     if (-not $prop) { continue }
-    if ($prop.DisplayValue -eq "Enabled") { Ok "$p enabled" }
-    elseif ($Apply) { Set-NetAdapterAdvancedProperty -Name $eth.Name -DisplayName $p -DisplayValue "Enabled"; Ok "$p enabled" }
-    else { Would "enable '$p'" }
+    $label = "$k ($($prop.DisplayName))"
+    if ("$($prop.RegistryValue)" -eq "1") { Ok "$label enabled" }
+    elseif ($prop.ValidRegistryValues -notcontains "1") { Warn "$label has no value 1 (valid: $($prop.ValidRegistryValues -join ',')); set it by hand" }
+    elseif ($Apply) { Set-NetAdapterAdvancedProperty -Name $eth.Name -RegistryKeyword $k -RegistryValue 1; Ok "$label enabled" }
+    else { Would "enable $label" }
   }
   if ($Apply) {
     Set-NetAdapterPowerManagement -Name $eth.Name -WakeOnMagicPacket Enabled -ErrorAction SilentlyContinue
