@@ -165,6 +165,23 @@ elseif ($Apply) {
   Ok "scheduled task created (at logon of $env:USERNAME). After a reboot, someone must sign in, or turn on automatic sign-in."
 } else { Would "register a logon task that runs 'wsl.exe --exec /bin/true'" }
 
+# ---------- Tailscale at boot ----------
+# The installer sets the service to Automatic (Delayed Start). On this PC a delayed service only
+# started at the first sign-in (2026-11-01: no tailscaled log from boot until sign-in, even after
+# 5 minutes), so with nobody signed in the PC was off the tailnet despite "Run unattended".
+# A Tailscale update may set it back; the preview shows it.
+if ($AtBoot) {
+  Say "Tailscale service starts at boot (Automatic, not Delayed Start)"
+  $ts = Get-CimInstance Win32_Service | Where-Object Name -eq "Tailscale"
+  if (-not $ts) { Warn "Tailscale service not found: install Tailscale, then turn on 'Run unattended'" }
+  elseif ($ts.StartMode -eq "Auto" -and -not $ts.DelayedAutoStart) { Ok "Tailscale: Automatic" }
+  elseif ($Apply) {
+    sc.exe config Tailscale start= auto | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "sc.exe config Tailscale start= auto failed ($LASTEXITCODE)" }
+    Ok "Tailscale: Automatic (was $($ts.StartMode)$(if ($ts.DelayedAutoStart) { ', Delayed Start' }))"
+  } else { Would "set the Tailscale service to Automatic (now $($ts.StartMode)$(if ($ts.DelayedAutoStart) { ', Delayed Start' })): delayed, it waits for a sign-in" }
+}
+
 # ---------- remote shutdown: sshd in WSL on 2222, from the tailnet only ----------
 if ($RemoteShutdown) {
   Say "TCP 2222 (sshd in WSL) from the tailnet $Tailnet only"
