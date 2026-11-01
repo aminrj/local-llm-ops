@@ -20,6 +20,9 @@ running by accident.
   llm off           stop everything (the assistant may take the GPU after 10 min)
   llm desk [hours]  keep the GPU for yourself (default 4 h): stops the assistant's model
   llm agent         lift the hold and let the assistant load its model now
+  llm stayon [hours] keep the PC on (default 4 h; 0 lifts it): no auto-off. Needed when
+                    nobody is signed in to Windows and no SSH session is open, e.g. a
+                    detached tmux running a long job
   llm status        what is running, on which port, free VRAM, and the arbiter's state
 
 Reasoning effort applies to `llm 38` only — it is the one model on a build
@@ -50,7 +53,7 @@ status() {
   (( found )) || echo "  nothing serving"
   local arb
   arb=$(curl -sf -m 2 "http://127.0.0.1:8091/status" 2>/dev/null \
-    | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["state"] + ": " + d["reason"])' 2>/dev/null)
+    | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["state"] + ": " + d["reason"] + ("\n  power: " + d["power"] if d.get("power") else ""))' 2>/dev/null)
   echo "  arbiter: ${arb:-not running (make agent-setup)}"
   if command -v nvidia-smi &>/dev/null; then
     read -r used total < <(nvidia-smi --query-gpu=memory.used,memory.total \
@@ -98,6 +101,12 @@ case "$target" in
                   curl -sf -m 30 -X POST -H 'Content-Type: application/json' -d "{\"hours\": $hours}" \
                     http://127.0.0.1:8091/hold >/dev/null || { echo "ERROR: arbiter not running (make agent-setup)" >&2; exit 1; }
                   echo "GPU held for you for ${hours} h; the assistant's model is stopped."; status ;;
+  stayon)         shift; hours="${1:-4}"
+                  [[ "$hours" =~ ^[0-9]+([.][0-9]+)?$ ]] || { echo "ERROR: 'llm stayon' takes hours, e.g. llm stayon 4" >&2; exit 1; }
+                  curl -sf -m 30 -X POST -H 'Content-Type: application/json' -d "{\"hours\": $hours}" \
+                    http://127.0.0.1:8091/stayon >/dev/null || { echo "ERROR: arbiter not running (make agent-setup)" >&2; exit 1; }
+                  if [ "$hours" = 0 ]; then echo "stayon lifted; the PC may switch itself off when idle."
+                  else echo "The PC stays on for ${hours} h (no auto-off)."; fi; status ;;
   agent)          shift; no_args "agent" "$@"
                   curl -sf -m 30 -X POST http://127.0.0.1:8091/release >/dev/null \
                     || { echo "ERROR: arbiter not running (make agent-setup)" >&2; exit 1; }

@@ -79,6 +79,71 @@ def test_night_handover_only_when_enabled_and_idle():
     assert arbiter.decide(obs(desk_up=True, hour=1, desk_log_mtime=NOW - 60), m, c).action == "none"
 
 
+# ---------- auto-off ----------
+
+CA = arbiter.Config(auto_off=True, auto_off_idle_seconds=1800, auto_off_retry_seconds=900)
+
+
+def idle_mem(**kw):
+    base = dict(last_desk_seen=NOW - 10_000, started_at=NOW - 10_000)
+    base.update(kw)
+    return arbiter.Memory(**base)
+
+
+def test_auto_off_disabled_by_default():
+    assert arbiter.decide_power(obs(), idle_mem(), C, "free")[0] is False
+
+
+def test_auto_off_when_idle_long_enough():
+    m = idle_mem()
+    off, why = arbiter.decide_power(obs(agent_log_mtime=NOW - 1900), m, CA, "ready")
+    assert off and "idle for 31 min" in why and m.off_sent_at == NOW
+
+
+def test_recent_request_keeps_it_on():
+    off, why = arbiter.decide_power(obs(agent_log_mtime=NOW - 600), idle_mem(), CA, "ready")
+    assert not off and why.startswith("auto-off in 21 min")
+    assert not arbiter.decide_power(obs(), idle_mem(demand_at=NOW - 60), CA, "free")[0]
+
+
+def test_full_window_after_boot():
+    assert not arbiter.decide_power(obs(), idle_mem(started_at=NOW - 300), CA, "free")[0]
+
+
+def test_people_keep_it_on_and_restart_the_window():
+    for o, word in ((obs(windows_users=1), "signed in"), (obs(windows_users=-1), "unreadable"),
+                    (obs(ssh_sessions=2), "SSH"), (obs(stayon_until=NOW + 60), "stayon")):
+        m = idle_mem()
+        off, why = arbiter.decide_power(o, m, CA, "free")
+        assert not off and word in why and m.last_present == NOW
+    # they left 5 minutes ago: the idle window counts from then
+    assert not arbiter.decide_power(obs(), idle_mem(last_present=NOW - 300), CA, "free")[0]
+
+
+def test_gpu_in_use_keeps_it_on():
+    for state in ("desk", "held", "starting"):
+        assert not arbiter.decide_power(obs(), idle_mem(), CA, state)[0]
+    assert arbiter.decide_power(obs(), idle_mem(), CA, "error")[0]   # a broken model doesn't keep it on
+
+
+def test_shutdown_sent_once_then_retried_after_cancel():
+    m = idle_mem()
+    assert arbiter.decide_power(obs(), m, CA, "free")[0]
+    assert arbiter.decide_power(obs(now=NOW + 60), m, CA, "free") == (False, "shutdown sent")
+    assert arbiter.decide_power(obs(now=NOW + 901), m, CA, "free")[0]
+
+
+def test_ssh_sessions_reads_established_on_port():
+    import tempfile
+    tmp_path = pathlib.Path(tempfile.mkdtemp())
+    head = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"
+    (tmp_path / "tcp").write_text(head +
+        "   0: 00000000:08AE 00000000:0000 0A 00000000:00000000 00:00000000 00000000  0 0 1\n"   # listening
+        "   1: 0B6A6A64:08AE 378E7A64:E0B8 01 00000000:00000000 00:00000000 00000000  0 0 2\n"   # established
+        "   2: 0B6A6A64:1F90 378E7A64:E0B9 01 00000000:00000000 00:00000000 00000000  0 0 3\n")  # other port
+    assert arbiter.ssh_sessions(2222, tmp_path) == 1
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

@@ -666,7 +666,7 @@ but only when you are not using the card. Three pieces, all user-level:
 |---|---|
 | `scripts/run-agent.sh` | The agent profile of `run-qwen3.8-27b.sh`: `127.0.0.1:8090`, `--parallel 2`, alias `qwen3.8-27b-agent`, API key, effort `low` by default, log `agent.log`. |
 | `scripts/arbiter.py` (`llm-arbiter` unit) | Decides who has the GPU. Starts the agent server only after the card has been free for 10 minutes (2 when the assistant is waiting), stops it when ComfyUI starts or a hold is set. HTTP on `127.0.0.1:8091`. |
-| `agent/Caddyfile` (`llm-agent-proxy` unit) | `:8743` with mutual TLS: only the assistant VMs, holding a client certificate from the assistant's private CA, get in. `/v1/*` goes to the model, `/arbiter/*` to the arbiter. |
+| `agent/Caddyfile` (`llm-agent-proxy` unit) | `:8743` with mutual TLS: only the assistant VMs, holding a client certificate from the assistant's private CA, get in. `/v1/*` goes to the model; of the arbiter only `/arbiter/status` and `/arbiter/request` (hold, release and stayon stay local). |
 
 **Your work always wins, mostly for free.** `llm 38`, `llm code`, `llm bee`,
 `llm mtp` and `llm off` run `codeoff` first, and `codeoff` stops every
@@ -697,8 +697,32 @@ powershell.exe -ExecutionPolicy Bypass -File windows\setup.ps1 -Apply
 ```
 
 `windows/setup.ps1 -Apply -Wol` prepares wake-on-LAN over the powerline adapter
-later (IP unbound from the Ethernet adapter so Wi-Fi stays the only network, magic
+(IP unbound from the Ethernet adapter so Wi-Fi stays the only network, magic
 packet on, Fast Startup off) and prints the MAC for homelab-foundation.
+
+### The PC switches itself on and off
+
+The lab wakes the PC by wake-on-LAN when the assistant needs it (homelab-foundation
+`docs/runbooks/ai-desktop-power.md`: brain-gate on each request, a timer ahead of the
+scout's jobs). With `AUTO_OFF=1` in `~/.config/llm-agent/arbiter.env` (`make
+agent-setup` adds it) the arbiter shuts Windows down again (`shutdown.exe /s /t 120`)
+after 30 minutes (`AUTO_OFF_IDLE_SECONDS`) in which **all** of these held:
+
+- nobody signed in to Windows (`quser.exe`; locked or disconnected sessions count,
+  and an unreadable quser counts as "someone is here");
+- no SSH session into this WSL on port 2222 (`SSH_PORT`);
+- no `llm stayon`;
+- the GPU not yours and the agent's model not loading (desk, held, starting);
+- no assistant request (writes to `agent.log`, a `/request` from brain-gate).
+
+```bash
+llm stayon 6   # keep the PC on for 6 hours, e.g. a detached tmux job (0 lifts it)
+llm status     # "power: auto-off in 12 min if nothing happens" / "kept on: ..."
+shutdown.exe /a   # cancel within the 2-minute warning; the arbiter retries after 15 min
+```
+
+The policy is `decide_power()` in `scripts/arbiter.py`, covered by `make test`.
+`AUTO_OFF=0` (then `systemctl --user restart llm-arbiter`) turns it off.
 
 ---
 
