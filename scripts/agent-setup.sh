@@ -12,6 +12,8 @@ set -euo pipefail
 #   - systemd user units llm-arbiter and llm-agent-proxy, rendered for this repo path
 #   - lingering for your user, so the units run without a login shell
 #   - ~/.config/llm-agent/arbiter.env with the defaults (edit it, then restart the unit)
+#   - sshd on port 2222 (keys only, this user only) so homelab-foundation can shut the PC down
+#     (`make desktop-off`); Windows lets it in from the tailnet only (setup.ps1 -RemoteShutdown)
 # What it expects from homelab-foundation (`make assistant-pki` there):
 #   ~/.config/llm-agent/tls/{ca.crt,server.crt,server.key} and ~/.config/llm-agent/api-key
 
@@ -116,5 +118,30 @@ if loginctl show-user "$USER" -p Linger 2>/dev/null | grep -q yes; then
 else
   run sudo loginctl enable-linger "$USER"
 fi
+
+say "sshd on 2222 for remote shutdown (homelab-foundation make desktop-off; tailnet only via setup.ps1 -RemoteShutdown)"
+# Keys only, this user only. With mirrored networking WSL's listeners sit on the Windows
+# addresses; the Hyper-V firewall rule from setup.ps1 -RemoteShutdown lets 2222 in from the
+# tailnet (100.64.0.0/10) and nothing else.
+SSHD_DROPIN=/etc/ssh/sshd_config.d/10-llm-agent.conf
+SSHD_WANT="# Managed by local-llm-ops scripts/agent-setup.sh
+Port 2222
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+AllowUsers $USER"
+if dpkg -s openssh-server >/dev/null 2>&1; then ok "openssh-server installed"; else run sudo apt-get install -y openssh-server; fi
+if [ "$(cat "$SSHD_DROPIN" 2>/dev/null)" = "$SSHD_WANT" ]; then ok "$SSHD_DROPIN"
+elif (( YES )); then
+  printf '%s\n' "$SSHD_WANT" | sudo tee "$SSHD_DROPIN" >/dev/null
+  sudo sshd -t
+  # Ubuntu runs sshd socket-activated: the socket unit takes the port from sshd_config
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now ssh.socket
+  sudo systemctl restart ssh.socket
+  ok "sshd on 2222 (keys only, $USER only)"
+else todo "write $SSHD_DROPIN (Port 2222, keys only, AllowUsers $USER), restart ssh.socket"; fi
+if [ -s "$HOME/.ssh/authorized_keys" ]; then ok "$(wc -l < "$HOME/.ssh/authorized_keys") key(s) in ~/.ssh/authorized_keys"
+else echo "  NOTE: no ~/.ssh/authorized_keys: add the public keys of the machines that may shut this PC down (the Mac's)"; fi
 
 (( YES )) || printf '\nNothing was changed. To apply: make agent-setup ARGS=--yes\n'
