@@ -226,9 +226,15 @@ def agent_pids(c: Config) -> list[int]:
     return pids
 
 
+def nvidia_smi() -> str:
+    # WSL ships it in /usr/lib/wsl/lib, which is not on a systemd user unit's PATH
+    import shutil
+    return shutil.which("nvidia-smi") or "/usr/lib/wsl/lib/nvidia-smi"
+
+
 def vram_used_mib() -> int:
     try:
-        out = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits", "-i", "0"],
+        out = subprocess.run([nvidia_smi(), "--query-gpu=memory.used", "--format=csv,noheader,nounits", "-i", "0"],
                              capture_output=True, text=True, timeout=10, check=True).stdout.strip()
         return int(out.splitlines()[0])
     except Exception:
