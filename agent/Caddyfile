@@ -25,8 +25,12 @@
 		}
 	}
 
-	# GPU arbiter: status, demand, hold/release (scripts/arbiter.py).
-	handle_path /arbiter/* {
+	# GPU arbiter (scripts/arbiter.py): the VMs may read its status and ask for the model, nothing
+	# else. /hold, /release and /stayon stay local (`llm desk|agent|stayon`): a VM must not be able
+	# to keep the GPU from you or keep the PC from switching itself off.
+	@arbiter path /arbiter/status /arbiter/request
+	handle @arbiter {
+		uri strip_prefix /arbiter
 		reverse_proxy 127.0.0.1:8091
 	}
 

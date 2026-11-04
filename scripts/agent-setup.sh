@@ -11,7 +11,8 @@ set -euo pipefail
 #   - caddy (apt) for the mutual-TLS front end on :8743; the system unit stays off
 #   - systemd user units llm-arbiter and llm-agent-proxy, rendered for this repo path
 #   - lingering for your user, so the units run without a login shell
-#   - ~/.config/llm-agent/arbiter.env with the defaults (edit it, then restart the unit)
+#   - ~/.config/llm-agent/arbiter.env with the defaults (edit it, then restart the unit); keys
+#     added later (AUTO_OFF*) are appended to an existing file, values you changed are kept
 #   - sshd on port 2222 (keys only, this user only) so homelab-foundation can shut the PC down
 #     (`make desktop-off`); Windows lets it in from the tailnet only (setup.ps1 -RemoteShutdown)
 # What it expects from homelab-foundation (`make assistant-pki` there):
@@ -71,8 +72,23 @@ if (( missing )); then
 fi
 
 say "arbiter settings"
+# Auto-off (scripts/arbiter.py decide_power): the lab wakes the PC when the assistant needs it
+# (homelab-foundation docs/runbooks/ai-desktop-power.md), so it switches itself off when idle.
+AUTO_OFF_DEFAULTS="AUTO_OFF=1
+AUTO_OFF_IDLE_SECONDS=1800
+AUTO_OFF_GRACE_SECONDS=120
+SSH_PORT=2222"
+arbiter_env_changed=0
 if [ -f "$CONF/arbiter.env" ]; then
   ok "$CONF/arbiter.env (kept)"
+  while IFS= read -r line; do
+    key="${line%%=*}"
+    if grep -q "^$key=" "$CONF/arbiter.env"; then ok "$(grep "^$key=" "$CONF/arbiter.env")"
+    elif (( YES )); then
+      (( arbiter_env_changed )) || printf '# Auto-off: switch the PC off when idle (AUTO_OFF=0 disables it)\n' >> "$CONF/arbiter.env"
+      printf '%s\n' "$line" >> "$CONF/arbiter.env"; arbiter_env_changed=1; ok "added $line"
+    else todo "append $line to $CONF/arbiter.env"; fi
+  done <<< "$AUTO_OFF_DEFAULTS"
 else
   run mkdir -p "$CONF"
   if (( YES )); then
@@ -85,7 +101,9 @@ VRAM_BUSY_MIB=3000
 NIGHT_HANDOVER=0
 NIGHT_HOUR=1
 NIGHT_IDLE_SECONDS=7200
+# Auto-off: switch the PC off when idle (AUTO_OFF=0 disables it)
 EOF
+    printf '%s\n' "$AUTO_OFF_DEFAULTS" >> "$CONF/arbiter.env"
     ok "wrote $CONF/arbiter.env"
   else
     todo "write $CONF/arbiter.env with the defaults"
@@ -107,6 +125,9 @@ for u in llm-arbiter llm-agent-proxy; do
 done
 run systemctl --user daemon-reload
 run systemctl --user enable --now llm-arbiter
+# A changed unit, script or arbiter.env only takes effect after a restart
+if (( YES )); then systemctl --user restart llm-arbiter; ok "llm-arbiter restarted"
+else todo "systemctl --user restart llm-arbiter"; fi
 if (( ! missing )); then
   run systemctl --user enable --now llm-agent-proxy
   run systemctl --user restart llm-agent-proxy
