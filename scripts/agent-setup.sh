@@ -133,6 +133,24 @@ if (( ! missing )); then
   run systemctl --user restart llm-agent-proxy
 fi
 
+# Lookout prewarm (the 06:00 radar queue): unit + daily timer. The lookout client
+# certificate and key live in $CONF as lookout-client.crt/.key (fetched from Key
+# Vault lookout-llm-client-cert/-key after each `make assistant-pki` rotation).
+for u in lookout-llm-prewarm.service lookout-llm-prewarm.timer; do
+  rendered="$(sed "s#@REPO@#$REPO#g" "$REPO/agent/systemd/$u")"
+  if [ -f "$UNITS/$u" ] && [ "$(cat "$UNITS/$u")" = "$rendered" ]; then
+    ok "$u up to date"
+  else
+    if (( YES )); then
+      printf '%s\n' "$rendered" > "$UNITS/$u" && ok "wrote $UNITS/$u"
+    else
+      todo "write $UNITS/$u"
+    fi
+  fi
+done
+run systemctl --user daemon-reload
+run systemctl --user enable --now lookout-llm-prewarm.timer
+
 say "lingering (units run without an open shell)"
 if loginctl show-user "$USER" -p Linger 2>/dev/null | grep -q yes; then
   ok "linger on"

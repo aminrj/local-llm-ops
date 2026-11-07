@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily pre-warm for the Lookout 06:00 radar LLM queue (Europe/Stockholm)
+
+[Timer]
+# Model load takes a few minutes; 05:45 leaves margin before the 06:00 queue.
+OnCalendar=*-*-* 05:45:00
+Persistent=true
+Unit=lookout-llm-prewarm.service
+
+[Install]
+WantedBy=timers.target
