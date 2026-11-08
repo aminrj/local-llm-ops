@@ -389,7 +389,7 @@ Two clients, two separate registries — **adding a model means editing both**:
 
 | Client | File | Key detail |
 |---|---|---|
-| opencode | `clients/opencode/config.json` (linked) | `provider.<id>.models.<model>`; verify with `opencode models` |
+| opencode | `clients/opencode/opencode.json` (linked) | `providers.<id>.models.<model>` (v2 schema); verify with `opencode models` |
 | pi | `~/.pi/agent/models.json` | `providers.<id>.models[].id` must equal the `--alias` |
 
 Provider ids now agree across opencode, pi and `llm.sh`:

@@ -3,9 +3,9 @@ set -euo pipefail
 
 # Link the opencode client config in this repo into ~/.config/opencode.
 #
-# opencode merges ~/.config/opencode/{config.json,opencode.json,opencode.jsonc}
-# in that order, later wins. Everything but the plugin list lives in
-# config.json; opencode.json carries only the plugin array. tui.json takes
+# opencode v2 reads only ~/.config/opencode/opencode.json(c); v1's config.json
+# is ignored, so providers, models, compaction and plugins all live in
+# opencode.json (v2 key names: providers/package/settings). tui.json takes
 # theme and keybinds and nothing else — a plugin array there is ignored.
 #
 # The rest of ~/.config/opencode (skills/, node_modules/) stays out of the
@@ -21,7 +21,7 @@ CHECK=0
 
 mkdir -p "$DEST"
 
-for f in config.json opencode.json tui.json dcp.jsonc; do
+for f in opencode.json tui.json dcp.jsonc; do
   src="$HERE/opencode/$f"
   dst="$DEST/$f"
   [[ -f "$src" ]] || { echo "  ! missing in repo: $f" >&2; continue; }
