@@ -10,7 +10,7 @@ set -euo pipefail
 
 echo "Stopping llama-server processes..."
 
-mapfile -t pids < <(pgrep -f "llama-server" 2>/dev/null || true)
+mapfile -t pids < <(pgrep -x llama-server 2>/dev/null || true)
 
 if [[ ${#pids[@]} -eq 0 ]]; then
   echo "  None running."
@@ -25,12 +25,12 @@ else
 
   # Wait for graceful exit, then escalate.
   for _ in {1..15}; do
-    pgrep -f "llama-server" >/dev/null 2>&1 || break
+    pgrep -x llama-server >/dev/null 2>&1 || break
     sleep 1
   done
-  if pgrep -f "llama-server" >/dev/null 2>&1; then
+  if pgrep -x llama-server >/dev/null 2>&1; then
     echo "  Still alive after 15s — sending SIGKILL."
-    pkill -9 -f "llama-server" 2>/dev/null || true
+    pkill -9 -x llama-server 2>/dev/null || true
     sleep 2
   fi
 fi
