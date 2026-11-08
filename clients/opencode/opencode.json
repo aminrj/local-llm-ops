@@ -14,7 +14,7 @@
           "name": "Qwen3.8-27B IQ4_XS (196k)",
           "limit": {
             "context": 196608,
-            "input": 184000,
+            "input": 148000,
             "output": 16384
           }
         }
@@ -118,9 +118,9 @@
   },
   "compaction": {
     "auto": true,
-    "buffer": "40%",
+    "buffer": "20%",
     "keep": {
-      "tokens": 24000
+      "tokens": 48000
     }
   },
   "plugins": [

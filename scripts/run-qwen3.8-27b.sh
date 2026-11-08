@@ -59,9 +59,10 @@ fi
 # 8192 was too small: the log shows three 'prompt state size N MiB exceeds
 # cache size limit 8192.000 MiB, skipping' events at 9826 / 14439 / 16696 MiB,
 # each of which costs a full re-prefill (~216 t/s at depth) on the way back.
-# With opencode now compacting at 160k the state tops out near 13.6 GiB;
-# 12288 covers the common case on a 28 GiB box. Raise to 14336 to cover all
-# of it if RAM pressure allows.
+# A saved state costs ~90 KiB per token. opencode compacts the 27B at 118k
+# (limit.input 148000 - 20%), so a state is ~10.4 GiB and ~11.6 GiB at worst:
+# 12288 holds one session on a 28 GiB box. It only helps while that much RAM is
+# free — otherwise the save goes through swap and stalls the next request.
 CACHE_RAM="${CACHE_RAM:-12288}"
 LOG_FILE="${LOG_FILE:-$LOG_DIR/qwen38.log}"
 SERVER="${SERVER:-$HOME/llama.cpp-38/build/bin/llama-server}"

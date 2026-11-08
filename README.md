@@ -291,6 +291,13 @@ Every skip is a full re-prefill on the way back, and this model prefills at
 ~216 tok/s at depth, not 1233 — minutes, not seconds. `run-qwen3.8-27b.sh` now
 sets 12288. The 35B has no skips in its log and stays at 8192.
 
+12288 holds one saved session of up to ~135k tokens. That is why the 27B's
+opencode trigger sits at 118k rather than later; see
+[Making opencode compact before the server errors](#making-opencode-compact-before-the-server-errors).
+Host RAM matters as much as the setting: the limit is 12 GiB, and with only a
+few GiB free a session switch saves its ~9 GiB state through swap. One such
+switch stalled a request for 154 s before it launched, with the GPU idle.
+
 ### Flags that do nothing
 
 `--defrag-thold` is marked `(DEPRECATED)` in the current binary. It was
@@ -342,6 +349,7 @@ local-llm-ops/
     ├── agent-setup.sh                  # caddy + user units for agent mode
     ├── llm.sh                          # switch model in one command, status, desk/agent
     ├── codeoff.sh                      # stop everything, wait for VRAM
+    ├── desk-free.sh                    # free the desk server for the nightly pre-warm, unless it is in use
     ├── _wait-ready.sh                  # poll /health, report VRAM headroom
     ├── bench-ctx.py                    # throughput vs context depth
     └── benchmark.sh                    # short-prompt benchmark
@@ -406,7 +414,14 @@ difference, left alone because renaming a provider invalidates saved sessions
 in both clients.
 
 Both are read at startup, so a client already running when you edit the config
-will not show the new model until you restart it.
+will not show the new model until you restart it. (opencode v2's background
+service also reloads `opencode.json` when it changes, so a running service picks
+an edit up on its own.)
+
+**After upgrading opencode to v2 the local models vanish** because v2 ignores
+`config.json` entirely; the providers now live in `opencode.json`, which
+`opencode debug config` lists as the only source. `opencode models` should show
+the four llama.cpp providers again.
 
 opencode's config is no longer just *described* here — it is tracked under
 `clients/opencode/` and symlinked into place:
@@ -423,17 +438,19 @@ place. Note that `pi-agent-config` also carries copies of both — two repos for
 one pair of files is how they drifted apart; `~/.pi` is the one that cannot go
 stale.
 
-The opencode provider block, under `provider`:
+The opencode provider block, under `providers` (opencode v2 — it reads only
+`opencode.json`, and v1's `provider`/`npm`/`options` became
+`providers`/`package`/`settings`):
 
 ```json
 "llamacpp-27b": {
-  "npm": "@ai-sdk/openai-compatible",
   "name": "llama.cpp (dense 27B, :8082)",
-  "options": { "baseURL": "http://127.0.0.1:8082/v1" },
+  "package": "@opencode/ai/providers/openai-compatible",
+  "settings": { "baseURL": "http://127.0.0.1:8082/v1" },
   "models": {
     "qwen3.8-27b": {
       "name": "Qwen3.8-27B IQ4_XS (196k)",
-      "limit": { "context": 196608, "input": 184000, "output": 16384 }
+      "limit": { "context": 196608, "input": 148000, "output": 16384 }
     }
   }
 }
@@ -514,21 +531,24 @@ The deepest completion in that log sits at `n_tokens = 196607` — one token
 under the wall. The client has to compact first, and opencode only does that
 if it is told the truth about the window.
 
-Read out of the opencode binary, the usable window is:
+Read out of the opencode 2.2.6 binary, a session compacts when it reaches:
 
 ```
-usable = limit.input ? (limit.input - compaction.reserved)
-                     : (limit.context - maxOutputTokens)
+window  = min(limit.input, limit.context)     # whichever are set
+trigger = window - buffer                     # buffer: "20%" of window, or a token count
 ```
 
-Two traps in that one line:
+(With no `buffer` the default is `max(15% of window, 16k)`.)
 
-- **`compaction.reserved` is ignored unless `limit.input` is set.** A config
-  with `reserved` and no `limit.input` silently does nothing.
-- **`preserve_recent_tokens` defaults to `min(15000, max(2000, usable/4))`**,
-  so it caps at 15000 no matter how large the window. On a 160k window that
-  summarises everything but the last 15k — which is what "it forgot the whole
-  session" actually was.
+- **`limit.input` is how each model gets its own trigger from one global
+  `buffer`.** A percentage scales with the window, so a single value fits
+  every model. A token count does not: a global `24000` would compact the 32k
+  Ollama models at 8,768 tokens.
+- **`compaction.reserved` and `preserve_recent_tokens` are v1 names.** v2 still
+  accepts `reserved` (as an alias for `buffer`), but the keys to write are
+  `buffer` and `keep.tokens`.
+- **`keep.tokens` defaults to 15000**, which summarises everything but the last
+  15k tokens — that is what "it forgot the whole session" actually was.
 
 `limit.output` is sent to the server as `max_tokens`, so it is a real cap, not
 a declaration. Measured over 2750 turns in `qwen38.log`: p95 = 5076 generated
@@ -539,25 +559,38 @@ costing ~16k of usable window for nothing. 16384 is 1.7x the observed ceiling;
 Global block:
 
 ```json
-"compaction": { "auto": true, "reserved": 24000, "preserve_recent_tokens": 48000 }
+"compaction": { "auto": true, "buffer": "20%", "keep": { "tokens": 48000 } }
 ```
 
-Per model, sized so the worst case in flight clears `--ctx-size` with ~10% to
-spare:
+Per model, `limit.input` sets the trigger (`0.8 x limit.input`), sized so the
+worst case in flight clears `--ctx-size`:
 
-| opencode model | `--ctx-size` | trigger | worst in flight | headroom |
-|---|---|---|---|---|
-| `llamacpp-27b/qwen3.8-27b` | 196608 | 160,000 | 176,384 | 20,224 |
-| `llamacpp/qwen3.6-35b-a3b` | 131072 | 100,000 | 116,384 | 14,688 |
-| `llamacpp-mtp/qwen3.6-35b-a3b-mtp` | 131072 | 100,000 | 116,384 | 14,688 |
-| `beellama/qwen3.6-27b-dflash` | 122800 | 92,000 | 108,384 | 14,416 |
+| opencode model | `--ctx-size` | `limit.input` | trigger | worst in flight | headroom |
+|---|---|---|---|---|---|
+| `llamacpp-27b/qwen3.8-27b` | 196608 | 148,000 | 118,400 | 134,784 | 61,824 |
+| `llamacpp/qwen3.6-35b-a3b` | 131072 | 124,000 | 99,200 | 115,584 | 15,488 |
+| `llamacpp-mtp/qwen3.6-35b-a3b-mtp` | 131072 | 124,000 | 99,200 | 115,584 | 15,488 |
+| `beellama/qwen3.6-27b-dflash` | 122800 | 116,000 | 92,800 | 109,184 | 13,616 |
 
-trigger = `limit.input - reserved`; worst = trigger + `limit.output`.
+worst = trigger + `limit.output` (16,384).
 
-Ollama models deliberately carry **no** `limit.input`: a 24000 global reserve
-against a 32768 window would trigger compaction at 2000 tokens. Without it the
-fallback applies and they trigger at 24576. That leaves no nominal headroom,
-which is only acceptable because ollama shifts context instead of erroring.
+**Why the 27B compacts at 118k and not later.** A saved prompt state costs about
+90 KiB per token (8,897 MiB at 101,034 tokens in `qwen38.log`), and the host
+cache is `--cache-ram 12288`. A 160k trigger meant ~14 GiB states, which exceed
+the limit and are skipped — every switch back to that session was then a full
+re-prefill, minutes at depth. At 118k the state is ~10.4 GiB and the worst case
+in flight (~135k) is ~11.6 GiB, so a session stays cacheable. Deeper context is
+also slower to serve: prefill drops from ~1,400 to ~860 tok/s and decode from
+~70 to ~50 tok/s between a shallow session and 100k.
+
+Ollama models carry no `limit.input`, so the window is `limit.context` (32,768):
+they trigger at 26,214, with a worst case of 34,406 — over the window. That is
+acceptable only because ollama shifts context instead of erroring.
+
+The numbers come from reading the binary, not from a measured compaction: the
+first one after a change should release at `n_tokens` near the trigger in
+`qwen38.log` (`grep 'stop processing' ... | tail`). If it fires far from there,
+recheck `limit.input`.
 
 ### The same fix for pi
 
@@ -700,6 +733,39 @@ powershell.exe -ExecutionPolicy Bypass -File windows\setup.ps1 -Apply
 (IP unbound from the Ethernet adapter so Wi-Fi stays the only network, magic
 packet on, Fast Startup off) and prints the MAC for homelab-foundation.
 
+### The daily pre-warm, and why it checks first
+
+The Lookout radar queue runs at 06:00 and needs the assistant's model, but the
+desk server holds the card indefinitely and the auto-off is blocked while
+Windows is signed in. `agent/systemd/lookout-llm-prewarm.timer` fires at 05:45;
+its service frees the GPU, then curls `/v1/models` through the Caddy front end
+so the arbiter loads the model with a few minutes to spare. `make agent-setup`
+installs both units.
+
+Freeing the card used to be an unconditional `pkill` of the :8082 server. On
+2026-11-08 that cut off a running opencode session at 05:46 (`ECONNREFUSED`),
+and the assistant's model then sat on the GPU until `llm 38` stopped it.
+
+`scripts/desk-free.sh` now makes the call:
+
+| desk state | result |
+|---|---|
+| no desk server on 8081-8083 | exit 0, go on to pre-warm |
+| log written within `IDLE_MINUTES` (default 30) | exit **3**: leave the server alone, skip the pre-warm |
+| log quiet for longer | stop the server (SIGTERM, SIGKILL after 30 s), exit 0, pre-warm |
+| activity cannot be determined | exit 3, leave it running |
+
+"Activity" is the mtime of the log file the running server writes to, found
+through the process's own stderr, so it holds for any model or launcher.
+llama-server logs every few seconds while it prefills or generates, so a long
+turn keeps it fresh. The unit sets `SuccessExitStatus=3`, so a skipped pre-warm
+is not reported as a failed unit. `DRY_RUN=1 scripts/desk-free.sh` prints the
+decision and stops nothing.
+
+The cost: if you are active at 05:45 the assistant's model does not load, and the
+06:00 queue has no LLM that day. `journalctl --user -u lookout-llm-prewarm`
+shows which way it went.
+
 ### The PC switches itself on and off
 
 The lab wakes the PC by wake-on-LAN when the assistant needs it (homelab-foundation
@@ -768,6 +834,17 @@ so the reason should be on screen. Otherwise: `make logs`.
 
 **`ERROR: another llama-server is running`**
 → Working as intended. 24 GB fits one model. Run `codeoff` first.
+
+**opencode lost its connection overnight, or the server was gone at 05:45**
+→ `lookout-llm-prewarm.timer` freed the GPU for the assistant. Since
+`desk-free.sh` it only does that when the desk has been quiet for 30 minutes;
+see *The daily pre-warm*. Check `journalctl --user -u lookout-llm-prewarm`. If
+the assistant holds the card, `llm 38` (or any `llm` command) stops it and starts
+yours.
+
+**opencode shows no local models after an upgrade to v2**
+→ v2 ignores `config.json`. The providers belong in `opencode.json`; run
+`clients/link.sh --check` and `opencode models`.
 
 **`hf: command not found`**
 → `pip install -U huggingface_hub`. The old `huggingface-cli` name is gone.
