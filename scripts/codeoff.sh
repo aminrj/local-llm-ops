@@ -16,7 +16,9 @@ if [[ ${#pids[@]} -eq 0 ]]; then
   echo "  None running."
 else
   for pid in "${pids[@]}"; do
-    port=$(ss -ltnp 2>/dev/null | grep -oP "0.0.0.0:\K[0-9]+(?=.*pid=$pid,)" | head -1)
+    # Any bind address: the desk servers listen on 0.0.0.0, the assistant's on
+    # 127.0.0.1. The label is cosmetic, so a miss must not abort under set -e.
+    port=$(ss -ltnp 2>/dev/null | grep -oP ":\K[0-9]+(?=\s.*pid=$pid,)" | head -1 || true)
     echo "  PID $pid${port:+ (port $port)}"
     kill "$pid" 2>/dev/null || true
   done
