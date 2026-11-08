@@ -1,0 +1,15 @@
+[Unit]
+Description=Free the GPU and pre-warm the Lookout agent LLM before the 06:00 radar queue
+Wants=llm-agent-proxy.service
+After=llm-agent-proxy.service
+
+[Service]
+Type=oneshot
+Environment=CONF=%h/.config/llm-agent
+# The desk slot (:8082, opencode's model) holds the GPU indefinitely; the auto-off is
+# blocked while Windows is signed in, so release it here. The bracket trick keeps
+# pkill from matching this command line. The agent slot (:8090) is never touched.
+ExecStart=/bin/bash -c 'if pgrep -f "llama-server.*--port 808[2]" >/dev/null; then pkill -f "llama-server.*--port 808[2]"; sleep 20; fi; curl -sk --max-time 900 --cert "$CONF/lookout-client.crt" --key "$CONF/lookout-client.key" --cacert "$CONF/tls/ca.crt" -H "Authorization: Bearer $(cat "$CONF/api-key")" https://127.0.0.1:8743/v1/models'
+
+[Install]
+WantedBy=timers.target
