@@ -33,7 +33,7 @@ if pgrep -f "llama-server" >/dev/null 2>&1; then
 fi
 
 # Run in background, fully detached from terminal
-nohup "$BEE_SERVER" \
+bash "$(dirname "${BASH_SOURCE[0]}")/_launch-server.sh" "$PORT" "$LOG_FILE" -- "$BEE_SERVER" \
   --model  "$MODEL_DIR/Qwen3.6-27B-Q5_K_S.gguf" \
   --mmproj "$MODEL_DIR/mmproj-BF16.gguf" \
   --no-mmproj-offload \
@@ -57,9 +57,6 @@ nohup "$BEE_SERVER" \
   --reasoning on \
   --chat-template-kwargs '{"preserve_thinking":true}' \
   --temp 0.6 --top-k 20 --min-p 0.0 \
-  -to 3600 \
-  >>"$LOG_FILE" 2>&1 < /dev/null &
-
-builtin disown
+  -to 3600
 
 exec bash "$(dirname "${BASH_SOURCE[0]}")/_wait-ready.sh" "$PORT" "$LOG_FILE"

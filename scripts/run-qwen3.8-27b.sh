@@ -119,7 +119,7 @@ fi
 
 echo "model=$(basename "$MODEL_FILE") ctx=$CTX ub=$UBATCH spec=$SPEC effort=$EFFORT host=$HOST port=$PORT parallel=$PARALLEL"
 
-nohup "$SERVER" \
+bash "$(dirname "${BASH_SOURCE[0]}")/_launch-server.sh" "$PORT" "$LOG_FILE" -- "$SERVER" \
   --model  "$MODEL_FILE" \
   --mmproj "$MODEL_DIR/mmproj-F16.gguf" \
   --no-mmproj-offload \
@@ -142,9 +142,6 @@ nohup "$SERVER" \
   --reasoning-preserve \
   -n 32768 \
   --parallel "$PARALLEL" \
-  -to 3600 \
-  >>"$LOG_FILE" 2>&1 < /dev/null &
-
-builtin disown
+  -to 3600
 
 exec bash "$(dirname "${BASH_SOURCE[0]}")/_wait-ready.sh" "$PORT" "$LOG_FILE"
