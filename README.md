@@ -870,3 +870,23 @@ curl -sf -m 2 "http://127.0.0.1:$port/health"
 
 `llm.sh` does this. It is worth remembering before writing any new script that
 polls a port.
+
+## Memory pressure and OOM kills
+
+The WSL VM has 28 GiB and `llama-server` holds 12-17 GiB of it (`--cache-ram`), so it is
+always the kernel OOM killer's first choice. Three layers keep an OOM event from taking
+unrelated work down with it:
+
+1. **Each server runs in its own systemd user unit** (`llm-<port>.service`, started by
+   `scripts/_launch-server.sh`). Before, a server started from a tmux pane lived in that
+   pane's cgroup, and an OOM kill made systemd stop the whole pane: shell, OpenCode TUI
+   and its server included. A server started by the arbiter would take
+   `llm-arbiter.service` down the same way. `systemctl --user status llm-8082` shows it.
+2. **tmux panes survive an OOM kill inside them**: a user drop-in,
+   `~/.config/systemd/user/tmux-spawn-.scope.d/oom.conf`, sets `OOMPolicy=continue`.
+3. **earlyoom picks the victim before the kernel does** (`sudo bash
+   scripts/host-memory-guard.sh`): under low RAM and swap it kills build tools (linkers,
+   compilers, node) first and avoids the model server, OpenCode, Claude Code, editors
+   and shells. Kills are logged in `journalctl -u earlyoom`.
+
+WSL swap is 16 GB (`C:\Users\Amine2\.wslconfig`, effective after `wsl --shutdown`).

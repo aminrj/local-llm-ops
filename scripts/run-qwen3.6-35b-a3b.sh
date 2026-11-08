@@ -32,7 +32,7 @@ if curl -sf "http://localhost:$PORT/health" >/dev/null 2>&1; then
   exit 1
 fi
 
-nohup "$SERVER" \
+bash "$(dirname "${BASH_SOURCE[0]}")/_launch-server.sh" "$PORT" "$LOG_FILE" -- "$SERVER" \
   --model  "$MODEL_DIR/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf" \
   --mmproj "$MODEL_DIR/mmproj-F16.gguf" \
   --no-mmproj-offload \
@@ -52,9 +52,6 @@ nohup "$SERVER" \
   --chat-template-kwargs '{"preserve_thinking": true}' \
   -n 32768 \
   --parallel 1 \
-  -to 3600 \
-  >>"$LOG_FILE" 2>&1 < /dev/null &
-
-builtin disown
+  -to 3600
 
 exec bash "$(dirname "${BASH_SOURCE[0]}")/_wait-ready.sh" "$PORT" "$LOG_FILE"
