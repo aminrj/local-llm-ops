@@ -37,7 +37,7 @@ fi
 
 # 24 GB fits exactly one of these models. Starting a second is how you get
 # 'CUDA error: unknown error' instead of a benchmark.
-if pgrep -f "llama-server" >/dev/null 2>&1; then
+if pgrep -x llama-server >/dev/null 2>&1; then
   echo "ERROR: another llama-server is running — the GPU only fits one." >&2
   echo "Run codeoff first, then retry." >&2
   exit 1
