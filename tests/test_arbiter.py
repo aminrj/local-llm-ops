@@ -149,3 +149,46 @@ if __name__ == "__main__":
         if name.startswith("test_"):
             fn()
     print("ok")
+
+
+# ---------- 2026-11-13: `llm code` while the agent was loaded froze the PC ----------
+# codeoff killed the agent, the arbiter restarted it in the gap before the 35B
+# answered /health, and both models loaded onto the 24 GB card at once.
+
+def test_loading_desk_server_counts_as_desk():
+    m = mem()
+    d = arbiter.decide(obs(desk_proc=True), m, C)
+    assert (d.state, d.action) == ("desk", "none") and m.last_desk_seen == NOW
+    d = arbiter.decide(obs(desk_proc=True, agent_up=True, agent_healthy=True), mem(), C)
+    assert (d.state, d.action) == ("desk", "stop")
+
+
+def test_agent_killed_by_codeoff_restarts_quiet_window():
+    m = mem()
+    assert arbiter.decide(obs(agent_up=True, agent_healthy=True), m, C).state == "ready"
+    # next tick: codeoff killed it, the desk server has not started yet
+    d = arbiter.decide(obs(now=NOW + 15), m, C)
+    assert (d.state, d.action) == ("free", "none") and m.last_desk_seen == NOW + 15
+
+
+def test_agent_stopped_by_arbiter_does_not_count_as_desk():
+    m = mem()
+    arbiter.decide(obs(agent_up=True, agent_healthy=True), m, C)
+    m.agent_stopping = True               # what tick() sets before stop_agent()
+    d = arbiter.decide(obs(now=NOW + 15), m, C)
+    assert d.action == "start" and not m.agent_stopping
+
+
+def test_loaded_agent_missing_health_check_is_not_killed():
+    m = mem(agent_started_at=NOW - 30)
+    assert arbiter.decide(obs(agent_up=True, agent_healthy=True), m, C).state == "ready"
+    d = arbiter.decide(obs(now=NOW + 900, agent_up=True, agent_healthy=False), m, C)
+    assert d.action == "none"
+
+
+def test_failed_load_backs_off_a_quiet_window():
+    m = mem(agent_started_at=NOW - 500)
+    assert arbiter.decide(obs(agent_up=True), m, C).action == "stop"
+    m.agent_stopping = True
+    assert arbiter.decide(obs(now=NOW + 15), m, C).action == "none"
+    assert arbiter.decide(obs(now=NOW + 601), m, C).action == "start"

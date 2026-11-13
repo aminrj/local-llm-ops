@@ -5,16 +5,23 @@ Rules, in order (decide() below is the whole policy, and the tests cover it):
 
 1. A hold (`llm desk [hours]`) keeps the GPU for you: the agent server is stopped
    and stays stopped until the hold expires or `llm agent` lifts it.
-2. Your servers win. If anything answers on the desk ports (8081-8083), or a
-   ComfyUI process runs, the GPU is yours ("desk"). Your `llm` commands already
-   stop the agent server first (codeoff kills every llama-server); a ComfyUI
-   start stops it here.
+2. Your servers win. If anything answers on the desk ports (8081-8083), any
+   other llama-server process exists (one still loading does not answer yet),
+   or a ComfyUI process runs, the GPU is yours ("desk"). Your `llm` commands
+   already stop the agent server first (codeoff kills every llama-server); a
+   ComfyUI start stops it here. An agent server that disappears without the
+   arbiter stopping it was killed by you (codeoff), which counts as desk use
+   too, so the quiet window starts over.
 3. With no agent server running, VRAM use above the threshold means something
    else holds the card (a Windows app, a game, a notebook): "desk" as well.
 4. The agent server starts only after the GPU has been free for QUIET_SECONDS
    (10 min), or ONDEMAND_QUIET_SECONDS (2 min) when the assistant has asked for
    it in the last 5 minutes. The quiet window is what keeps it from slipping
-   into the gap of an `llm 38` model switch.
+   into the gap of an `llm code` / `llm 38` model switch: two ~22 GB models on
+   the 24 GB card spill into Windows' RAM (CUDA sysmem fallback) and freeze the
+   whole PC. START_TIMEOUT_SECONDS applies to loading only; a loaded server that
+   misses a health check (busy, or the box is swapping) is left alone, and a
+   failed load waits a full quiet window before the next try.
 5. Optional night handover (off by default): at NIGHT_HOUR, if your desk server
    has logged nothing for NIGHT_IDLE_SECONDS, it runs `llm off` so night jobs
    can use the card. You restart your model in the morning.
@@ -111,6 +118,7 @@ class Observed:
     ssh_sessions: int = 0      # established connections to sshd on SSH_PORT
     stayon_until: float = 0    # `llm stayon` (0 when none)
     agent_log_mtime: float = 0  # newest write of the agent server's log = its last request
+    desk_proc: bool = False    # a llama-server other than the agent's exists (loading or serving)
 
 
 @dataclasses.dataclass
@@ -118,6 +126,8 @@ class Memory:
     last_desk_seen: float
     demand_at: float = 0.0
     agent_started_at: float = 0.0
+    agent_seen_up: bool = False # the agent server existed on the previous tick
+    agent_stopping: bool = False # the arbiter itself stopped it (not codeoff)
     started_at: float = 0.0     # the arbiter's start (≈ boot): a full idle window before any auto-off
     last_present: float = 0.0   # last tick someone was signed in, on SSH or had `llm stayon`
     off_sent_at: float = 0.0
@@ -132,11 +142,20 @@ class Decision:
 
 def decide(o: Observed, m: Memory, c: Config) -> Decision:
     """The policy. Pure: mutates only `m` (the remembered timestamps)."""
+    # The agent vanished and we did not stop it: codeoff did, on the way to
+    # loading a desk model. Treat that as desk use so the quiet window covers
+    # the gap until the new server answers /health.
+    if m.agent_seen_up and not o.agent_up and not m.agent_stopping:
+        m.last_desk_seen = o.now
+    if not o.agent_up:
+        m.agent_stopping = False
+    m.agent_seen_up = o.agent_up
+
     if o.hold_until > o.now:
         return Decision("held", f"held for you until {time.strftime('%H:%M', time.localtime(o.hold_until))}",
                         "stop" if o.agent_up else "none")
 
-    if o.desk_up or o.comfy:
+    if o.desk_up or o.desk_proc or o.comfy:
         m.last_desk_seen = o.now
         if (c.night_handover and o.desk_up and not o.comfy and o.hour == c.night_hour
                 and o.desk_log_mtime and o.now - o.desk_log_mtime >= c.night_idle_seconds):
@@ -150,9 +169,13 @@ def decide(o: Observed, m: Memory, c: Config) -> Decision:
 
     if o.agent_up:
         if o.agent_healthy:
+            m.agent_started_at = 0.0    # loaded: the start timeout no longer applies
             return Decision("ready", "the assistant's model is loaded")
         if m.agent_started_at and o.now - m.agent_started_at > c.start_timeout_seconds:
+            m.last_desk_seen = o.now    # back off a full quiet window before retrying
             return Decision("error", "the assistant's model did not become healthy in time", "stop")
+        if not m.agent_started_at:
+            return Decision("ready", "the assistant's model is loaded but not answering /health (busy?)")
         return Decision("starting", "the assistant's model is loading")
 
     quiet = o.now - m.last_desk_seen
@@ -209,6 +232,20 @@ def proc_cmdlines() -> list[str]:
         except OSError:
             continue
     return out
+
+
+def desk_server_running(c: Config) -> bool:
+    """A llama-server process that is not the agent's: a desk model, possibly still loading."""
+    agent = set(agent_pids(c))
+    for p in pathlib.Path("/proc").iterdir():
+        if not p.name.isdigit() or int(p.name) in agent:
+            continue
+        try:
+            if (p / "comm").read_text().strip() == "llama-server":
+                return True
+        except OSError:
+            continue
+    return False
 
 
 def agent_pids(c: Config) -> list[int]:
@@ -316,6 +353,7 @@ def observe(c: Config) -> Observed:
         now=now,
         hold_until=hold_until(c),
         desk_up=any(http_ok(p) for p in c.desk_ports),
+        desk_proc=desk_server_running(c),
         comfy=any(comfy_re.search(cmd) for cmd in proc_cmdlines()),
         vram_used_mib=vram_used_mib(),
         agent_up=bool(pids),
@@ -384,6 +422,7 @@ class Arbiter:
                 self.m.agent_started_at = o.now
                 start_agent(self.c)
             elif d.action == "stop":
+                self.m.agent_stopping = True
                 stop_agent(self.c)
                 self.m.agent_started_at = 0.0
             elif d.action == "night_off":
