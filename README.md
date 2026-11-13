@@ -890,3 +890,26 @@ unrelated work down with it:
    and shells. Kills are logged in `journalctl -u earlyoom`.
 
 WSL swap is 16 GB (`C:\Users\Amine2\.wslconfig`, effective after `wsl --shutdown`).
+
+### Never two models on the card (2026-11-13)
+
+`llm code` with the assistant's model loaded froze the whole PC. `codeoff` killed the
+agent server, and while it waited for the VRAM to drain the arbiter saw no desk server
+answering `/health` and started the agent again; the 35B then loaded on top of it.
+Two ~22 GB models do not fail cleanly on the 24 GB card: CUDA on Windows spills the
+overflow into system RAM (sysmem fallback), and with WSL allowed 28 of the host's
+31 GB, Windows itself ran out. Now:
+
+1. **The arbiter counts any non-agent `llama-server` process as desk use**, loading or
+   not, and an agent server that disappears without the arbiter stopping it (codeoff)
+   restarts the 10-minute quiet window. A failed agent load also waits a full window
+   instead of retrying at once, and a loaded agent that misses one health check is no
+   longer killed and reloaded.
+2. **`run-qwen3.6-35b-a3b.sh` refuses to start while any `llama-server` runs**, like the
+   other run scripts already did; it used to check only its own port.
+3. **WSL memory is capped at 24 GB** (`memory=24GB`), leaving ~7 GB for Windows and
+   the display driver. Takes effect after `wsl --shutdown`.
+4. **Sysmem fallback off** (Windows, by hand): NVIDIA Control Panel → Manage 3D
+   settings → Global → *CUDA - Sysmem Fallback Policy* → *Prefer No Sysmem
+   Fallback*. An over-full card then gives a CUDA out-of-memory error in the server log
+   instead of eating Windows' RAM.

@@ -25,10 +25,15 @@ if [ ! -x "$SERVER" ]; then
   exit 1
 fi
 
-# Refuse to start on top of a live server — otherwise the second process
-# fights the first for the last ~400 MiB of VRAM and dies with a CUDA error.
-if curl -sf "http://localhost:$PORT/health" >/dev/null 2>&1; then
-  echo "ERROR: something is already serving on port $PORT. Run codeoff first." >&2
+# Refuse to start on top of any llama-server, not just one on this port: the
+# assistant's server on :8090 counts too, and so does one still loading (it
+# doesn't answer /health yet). Two ~22 GB models on the 24 GB card don't fail
+# cleanly: CUDA spills the second into Windows' RAM and the whole PC freezes
+# (2026-11-13).
+if pgrep -x llama-server >/dev/null 2>&1; then
+  echo "ERROR: another llama-server is running — the GPU only fits one." >&2
+  pgrep -a -x llama-server | sed -E 's/^([0-9]+) .*--port ([0-9]+).*/  PID \1 on :\2/' >&2
+  echo "Use 'llm code' (it stops the others first) or run codeoff, then retry." >&2
   exit 1
 fi
 
