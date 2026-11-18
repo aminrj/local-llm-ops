@@ -1,0 +1,22 @@
+[Unit]
+Description=Keep the Lookout agent LLM loaded through the night radar drain window (23:00-04:00 Europe/Stockholm)
+
+[Timer]
+# The radar night drain (lookout-radar SCHEDULES.drainTriage) dispatches triage
+# every 20 min between 23:00 and 04:00 owner-local. The agent server auto-offs
+# after NIGHT_IDLE_SECONDS (2h) of a quiet log, and the desk servers can hold
+# the GPU, so warm the agent at the window edge and re-warm every ~30 min. Each
+# firing runs the same desk-free + /v1/models path as the 05:45 pre-warm; it is
+# a no-op (desk-free exit 3) whenever the desk is actually in use.
+#
+# Times are owner-local, like lookout-llm-prewarm.timer (05:45 local = 04:45 UTC).
+OnCalendar=*-*-* 22:50:00
+OnCalendar=*-*-* 23:20:00
+OnCalendar=*-*-* 23:50:00
+OnCalendar=*-*-* 00,01,02,03:20:00
+OnCalendar=*-*-* 00,01,02,03:50:00
+Persistent=false
+Unit=lookout-llm-prewarm.service
+
+[Install]
+WantedBy=timers.target
