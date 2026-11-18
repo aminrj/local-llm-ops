@@ -136,7 +136,10 @@ fi
 # Lookout prewarm (the 06:00 radar queue): unit + daily timer. The lookout client
 # certificate and key live in $CONF as lookout-client.crt/.key (fetched from Key
 # Vault lookout-llm-client-cert/-key after each `make assistant-pki` rotation).
-for u in lookout-llm-prewarm.service lookout-llm-prewarm.timer; do
+# lookout-llm-nightwarm.timer reuses lookout-llm-prewarm.service (same desk-free
+# + /v1/models path) to keep the agent model loaded through the 23:00-04:00 radar
+# night-drain window.
+for u in lookout-llm-prewarm.service lookout-llm-prewarm.timer lookout-llm-nightwarm.timer; do
   rendered="$(sed "s#@REPO@#$REPO#g" "$REPO/agent/systemd/$u")"
   if [ -f "$UNITS/$u" ] && [ "$(cat "$UNITS/$u")" = "$rendered" ]; then
     ok "$u up to date"
@@ -150,6 +153,7 @@ for u in lookout-llm-prewarm.service lookout-llm-prewarm.timer; do
 done
 run systemctl --user daemon-reload
 run systemctl --user enable --now lookout-llm-prewarm.timer
+run systemctl --user enable --now lookout-llm-nightwarm.timer
 
 say "lingering (units run without an open shell)"
 if loginctl show-user "$USER" -p Linger 2>/dev/null | grep -q yes; then
