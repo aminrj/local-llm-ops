@@ -47,6 +47,30 @@
 		reverse_proxy 127.0.0.1:8090
 	}
 
+	# The owner's desk models, for the software factory's night work on the devbox: `llm code` (:8081) and
+	# `llm 38` (:8082). Same client certificate rule as above. The factory only uses whichever model is already
+	# serving; nothing here can load, switch or hold a model, and the arbiter still treats them as the owner's.
+	@code path /code/v1/* /code/health
+	handle @code {
+		uri strip_prefix /code
+		reverse_proxy 127.0.0.1:8081 {
+			flush_interval -1
+			transport http {
+				response_header_timeout 900s
+			}
+		}
+	}
+	@q38 path /38/v1/* /38/health
+	handle @q38 {
+		uri strip_prefix /38
+		reverse_proxy 127.0.0.1:8082 {
+			flush_interval -1
+			transport http {
+				response_header_timeout 900s
+			}
+		}
+	}
+
 	handle {
 		respond 404
 	}
