@@ -1,0 +1,8 @@
+[Unit]
+Description=Keep the PC on through the night so Lookout radar can use the idle GPU
+
+[Service]
+Type=oneshot
+# The arbiter's local API (scripts/arbiter.py, POST /stayon): no auto-off for 10 hours. It only keeps the
+# PC on; the arbiter still gives the GPU to the owner whenever they use it. `llm stayon 0` lifts it.
+ExecStart=/usr/bin/curl -sf -X POST http://127.0.0.1:8091/stayon -H 'content-type: application/json' -d '{"hours": 10}'

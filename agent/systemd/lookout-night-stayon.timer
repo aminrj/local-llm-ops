@@ -1,0 +1,13 @@
+[Unit]
+Description=Every evening at 21:55, keep the PC on until about 08:00 for Lookout GPU work
+
+[Timer]
+# Lookout radar (drainTriage, every 20 min) triages and hunts whenever the arbiter reports the model
+# loaded, and asks for it with /arbiter/request when the GPU is free. That only works while the PC is on;
+# auto-off (AUTO_OFF_IDLE_SECONDS) would otherwise switch it off after 30 quiet minutes. Owner-local time.
+OnCalendar=*-*-* 21:55:00
+Persistent=true
+Unit=lookout-night-stayon.service
+
+[Install]
+WantedBy=timers.target

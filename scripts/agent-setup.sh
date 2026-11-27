@@ -136,10 +136,9 @@ fi
 # Lookout prewarm (the 06:00 radar queue): unit + daily timer. The lookout client
 # certificate and key live in $CONF as lookout-client.crt/.key (fetched from Key
 # Vault lookout-llm-client-cert/-key after each `make assistant-pki` rotation).
-# lookout-llm-nightwarm.timer reuses lookout-llm-prewarm.service (same desk-free
-# + /v1/models path) to keep the agent model loaded through the 23:00-04:00 radar
-# night-drain window.
-for u in lookout-llm-prewarm.service lookout-llm-prewarm.timer lookout-llm-nightwarm.timer; do
+# lookout-night-stayon.timer (21:55) keeps the PC on through the night (arbiter /stayon, 10 h) so radar
+# can use the idle GPU; radar asks for the model itself (/arbiter/request), so no warm timer is needed.
+for u in lookout-llm-prewarm.service lookout-llm-prewarm.timer lookout-night-stayon.service lookout-night-stayon.timer; do
   rendered="$(sed "s#@REPO@#$REPO#g" "$REPO/agent/systemd/$u")"
   if [ -f "$UNITS/$u" ] && [ "$(cat "$UNITS/$u")" = "$rendered" ]; then
     ok "$u up to date"
@@ -153,7 +152,8 @@ for u in lookout-llm-prewarm.service lookout-llm-prewarm.timer lookout-llm-night
 done
 run systemctl --user daemon-reload
 run systemctl --user enable --now lookout-llm-prewarm.timer
-run systemctl --user enable --now lookout-llm-nightwarm.timer
+run systemctl --user disable --now lookout-llm-nightwarm.timer 2>/dev/null || true
+run systemctl --user enable --now lookout-night-stayon.timer
 
 say "lingering (units run without an open shell)"
 if loginctl show-user "$USER" -p Linger 2>/dev/null | grep -q yes; then
