@@ -742,12 +742,11 @@ its service frees the GPU, then curls `/v1/models` through the Caddy front end
 so the arbiter loads the model with a few minutes to spare. `make agent-setup`
 installs both units.
 
-`agent/systemd/lookout-llm-nightwarm.timer` reuses the same service to keep the
-agent model loaded through the radar **night drain** window (23:00-04:00
-owner-local), re-warming every ~30 min. The radar schedules `drainTriage` every
-20 min and only does work inside that window, so the GPU triages the pending and
-retried-failed backlog overnight instead of sitting idle until the 06:00 queue.
-Each firing is a no-op whenever the desk is in use (`desk-free.sh` exit 3).
+`agent/systemd/lookout-night-stayon.timer` (21:55 every evening) calls the arbiter's `/stayon` for 10
+hours, so the PC stays on through the night. Since 2026-11-27 the radar has no night window: every 20 min
+it asks `/arbiter/status` and triages or hunts whenever the model is loaded, and asks for the model with
+`/arbiter/request` when the GPU is free. The arbiter still hands the GPU to you whenever you use it;
+`llm stayon 0` lifts the night keep-on.
 
 Freeing the card used to be an unconditional `pkill` of the :8082 server. On
 2026-11-08 that cut off a running opencode session at 05:46 (`ECONNREFUSED`),
